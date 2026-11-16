@@ -1,0 +1,17 @@
+{
+  "name": "Thiết bị ngoài trên trụ — CSKVTT",
+  "short_name": "TB Ngoài",
+  "description": "Cập nhật, thống kê thiết bị của đơn vị ngoài lắp trên trụ chiếu sáng",
+  "lang": "vi",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0b3b6f",
+  "background_color": "#f4f6fa",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
