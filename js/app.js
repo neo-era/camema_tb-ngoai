@@ -811,7 +811,7 @@ routes['/map'] = (app) => {
   if (!window.L) { setTimeout(() => curView === '/map' && render(), 300); return; }
   if (S.map) S.map.remove();
   S.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([10.776, 106.69], 13);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(S.map);
+  setupBaseLayers(S.map);
   L.control.zoom({ position: 'topright' }).addTo(S.map);
   mapLayer = L.layerGroup().addTo(S.map);
   drawMarkers(true);
@@ -850,6 +850,31 @@ function pickAt(ll) {
   S.pickLoc = { lat: +ll.lat.toFixed(7), lng: +ll.lng.toFixed(7), acc: pickAcc(ll.lat) };
   document.body.classList.remove('picking');
   go('#/form');
+}
+// Lớp nền bản đồ: chọn được, nhớ lựa chọn; lớp đang dùng lỗi liên tục thì tự chuyển lớp khác
+const BASES = {
+  esri_pho: { ten: 'Đường phố (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 19, attribution: 'Tiles © Esri' } },
+  esri_vt: { ten: 'Vệ tinh (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 20, maxNativeZoom: 19, attribution: 'Tiles © Esri — Esri, Maxar, Earthstar Geographics' } },
+  osm: { ten: 'OpenStreetMap', url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opt: { maxZoom: 19, attribution: '© OpenStreetMap', referrerPolicy: 'strict-origin-when-cross-origin' } }
+};
+function setupBaseLayers(map) {
+  const layers = {}, names = {};
+  for (const [k, b] of Object.entries(BASES)) { layers[k] = L.tileLayer(b.url, b.opt); names[b.ten] = layers[k]; }
+  let cur = localStorage.getItem('tbn_base'); if (!BASES[cur]) cur = 'esri_pho';
+  layers[cur].addTo(map);
+  L.control.layers(names, null, { position: 'topright', collapsed: true }).addTo(map);
+  let errs = 0, switched = !!S.baseSwitched;
+  const watch = (k) => {
+    layers[k].on('tileerror', () => {
+      if (switched || ++errs < 6) return;
+      switched = S.baseSwitched = true; map.removeLayer(layers[k]);
+      const next = Object.keys(BASES).find((x) => x !== k && x !== 'osm') || 'esri_pho';
+      layers[next].addTo(map); toast(`Không tải được bản đồ "${BASES[k].ten}", đã chuyển sang "${BASES[next].ten}"`);
+    });
+    layers[k].on('tileload', () => { errs = 0; });
+  };
+  Object.keys(BASES).forEach(watch);
+  map.on('baselayerchange', (e) => { const k = Object.keys(layers).find((x) => layers[x] === e.layer); if (k) { localStorage.setItem('tbn_base', k); errs = 0; switched = false; } });
 }
 function mapData() { return C.filterRecs(allRecs(), { q: S.listFilter.q, quan: S.listFilter.quan }).filter((r) => r.lat && r.lng); }
 function levelOf(r) { const a = C.topAlert(r, new Date(), S.cfg); return a ? a.level : 'ok'; }

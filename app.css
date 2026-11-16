@@ -175,6 +175,8 @@ body.picking .pickbar { display: grid; gap: 10px; position: fixed; z-index: 28; 
 .pickbar .row .btn.pri { flex: 1.7; }
 body.picking .toasts { bottom: calc(var(--tab-h) + var(--sab) + 170px); }
 .mapv .leaflet-top { top: calc(var(--sat) + 66px); }
+.leaflet-control-layers-toggle { width: 44px !important; height: 44px !important; }
+.leaflet-control-layers label { min-height: 40px; display: flex; align-items: center; font-size: 15px; }
 @media (orientation: landscape) and (max-height: 520px) { .mapv .leaflet-right { right: calc(44% + 4px); } }
 
 /* Hộp thoại, toast */
