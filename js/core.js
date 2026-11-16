@@ -308,6 +308,99 @@ var Core = (function () {
     });
   }
 
+
+  // ---------- tự điền vị trí ----------
+  /** Khoảng cách (m) giữa 2 toạ độ — haversine. */
+  function distM(lat1, lng1, lat2, lng2) {
+    var R = 6371008.8, r = Math.PI / 180, dLat = (lat2 - lat1) * r, dLng = (lng2 - lng1) * r;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  }
+  function num(v) { var n = Number(v); return v === '' || v == null || !isFinite(n) ? null : n; }
+  /** Bản ghi còn hiệu lực có toạ độ trong bán kính maxM, gần nhất trước. */
+  function nearest(recs, lat, lng, maxM, exceptId) {
+    lat = num(lat); lng = num(lng); if (lat == null || lng == null) return [];
+    var out = [];
+    (recs || []).forEach(function (x) {
+      var a = num(x.lat), b = num(x.lng);
+      if (a == null || b == null || !isActive(x) || (exceptId && x.id === exceptId)) return;
+      var d = distM(lat, lng, a, b); if (d <= maxM) out.push({ r: x, d: d });
+    });
+    return out.sort(function (p, q) { return p.d - q.d; });
+  }
+  /** Tên đường từ kết quả tra ngược địa chỉ (Esri): bỏ số nhà, hẻm, chữ "Đường". */
+  function streetName(addr) {
+    if (!addr) return '';
+    var s = str(addr.Address || addr.StAddr || '');
+    if (str(addr.AddNum) && s.indexOf(str(addr.AddNum)) === 0) s = s.slice(str(addr.AddNum).length).trim();
+    s = s.split(/\s*[&,]\s*/)[0];
+    s = s.replace(/^(số\s*)?\d+[\w\/\-]*\s+/i, '').replace(/^(hẻm|hem|kiệt|ngõ|ngách)\s+\S+\s+/iu, '').replace(/^(đường|duong|đ\.)\s+/iu, '');
+    s = s.replace(/\s+/g, ' ').trim();
+    return /\p{L}/u.test(s) && s.length >= 2 && s.length <= 80 ? s : '';
+  }
+  function topBy(list, key) {
+    var c = {}, best = '', n = 0;
+    list.forEach(function (x) { var v = str(x[key]); if (v) { c[v] = (c[v] || 0) + 1; if (c[v] > n) { n = c[v]; best = v; } } });
+    return best;
+  }
+  /**
+   * Gợi ý tự điền theo vị trí từ thiết bị đã có gần đó.
+   * ≤ sameM (cùng trụ): tủ + số trụ + tuyến + quận/phường; ≤ nearM: tuyến + tủ + quận/phường.
+   * Chỉ ghi vào ô đang trống hoặc ô do máy tự điền (auto); không đè ô người dùng đã gõ.
+   */
+  function autoFill(form, recs, opt) {
+    opt = opt || {};
+    var sameM = opt.sameM || 12, nearM = opt.nearM || 60, auto = opt.auto || {};
+    var patch = {}, src = null;
+    var nb = nearest(recs, form.lat, form.lng, nearM, form.id);
+    var free = function (k) { return !str(form[k]) || auto[k]; };
+    function set(k, v) { v = str(v); if (v && free(k) && str(form[k]) !== v) patch[k] = v; }
+    if (nb.length) {
+      var top = nb[0], same = top.d <= sameM;
+      var pool = nb.filter(function (x) { return x.d <= Math.max(sameM, top.d + 15); }).map(function (x) { return x.r; });
+      src = { kind: same ? 'tru' : 'gan', d: Math.round(top.d), r: top.r };
+      set('tuyen', topBy(pool, 'tuyen'));
+      set('tu', top.r.tu);
+      if (same) set('so_tru', top.r.so_tru);
+      var q = top.r.quan, okQ = has(DM.QUAN, q) && (!opt.quans || opt.quans.indexOf(q) >= 0);
+      if (okQ && (!form.quan || auto.quan) && form.quan !== q) patch.quan = q;
+      if (okQ && str(top.r.phuong) && (patch.quan || form.quan === q) && (patch.quan || !str(form.phuong) || auto.phuong) && form.phuong !== top.r.phuong) patch.phuong = top.r.phuong;
+    } else if (opt.street) {
+      set('tuyen', opt.street);
+      if (patch.tuyen || str(form.tuyen) === str(opt.street)) src = { kind: 'bando' };
+    }
+    return { patch: patch, src: src };
+  }
+  /** Tủ đã biết → tuyến, quận, phường hay gặp nhất. */
+  function fromCabinet(recs, tu) {
+    var k = dupCode(tu); if (!k) return null;
+    var list = (recs || []).filter(function (x) { return isActive(x) && dupCode(x.tu) === k; });
+    if (!list.length) return null;
+    var q = topBy(list, 'quan');
+    return { tuyen: topBy(list, 'tuyen'), quan: q, phuong: topBy(list.filter(function (x) { return x.quan === q; }), 'phuong'), n: list.length };
+  }
+  /** Danh sách gợi ý khi gõ: tuyến (ưu tiên cùng quận), tủ (ưu tiên cùng tuyến), trụ đã có của tủ. */
+  function suggestLists(recs, f) {
+    f = f || {};
+    var act = (recs || []).filter(isActive), cnt = function (list, key, norm) {
+      var m = {}; list.forEach(function (x) { var v = str(x[key]); if (!v) return; var k = norm ? norm(v) : fold(v); if (!m[k]) m[k] = { v: norm ? upperCode(v) : v, n: 0 }; m[k].n++; });
+      return Object.keys(m).map(function (k) { return m[k]; });
+    };
+    var sortBy = function (a, pri) { return a.sort(function (x, y) { return (pri(y) - pri(x)) || (y.n - x.n) || x.v.localeCompare(y.v, 'vi'); }); };
+    var tuyenSet = {}; act.forEach(function (x) { if (f.quan && x.quan === f.quan) tuyenSet[fold(x.tuyen)] = 1; });
+    var tuyen = sortBy(cnt(act, 'tuyen'), function (x) { return tuyenSet[fold(x.v)] ? 1 : 0; }).map(function (x) { return x.v; });
+    var tuSet = {}; act.forEach(function (x) { if (str(f.tuyen) && fold(x.tuyen) === fold(f.tuyen)) tuSet[dupCode(x.tu)] = 1; });
+    var tu = sortBy(cnt(act, 'tu', dupCode), function (x) { return tuSet[dupCode(x.v)] ? 1 : 0; }).map(function (x) { return x.v; });
+    var tru = [];
+    if (dupCode(f.tu)) {
+      var m = {};
+      act.forEach(function (x) { if (dupCode(x.tu) !== dupCode(f.tu) || !str(x.so_tru)) return; var k = dupCode(x.so_tru); (m[k] = m[k] || { v: upperCode(x.so_tru), items: [] }).items.push(str(x.loai) + (str(x.don_vi) ? ' – ' + str(x.don_vi) : '')); });
+      tru = Object.keys(m).map(function (k) { return { v: m[k].v, label: m[k].items.length + ' TB: ' + m[k].items.slice(0, 2).join('; ') + (m[k].items.length > 2 ? '…' : '') }; })
+        .sort(function (a, b) { var na = parseInt(a.v, 10), nb2 = parseInt(b.v, 10); return (isNaN(na) || isNaN(nb2) ? 0 : na - nb2) || a.v.localeCompare(b.v); });
+    }
+    return { tuyen: tuyen, tu: tu, tru: tru };
+  }
+
   // ---------- phân quyền ----------
   function quanList(u) { return Array.isArray(u.quan) ? u.quan : arr(u.quan); }
   function can(u, action, rec, old) {
@@ -350,7 +443,8 @@ var Core = (function () {
     fold: fold, isDate: isDate, todayVN: todayVN, daysBetween: daysBetween, toBool: toBool,
     sanitizeCell: sanitizeCell, safeEqual: safeEqual, upperCode: upperCode,
     validate: validate, alerts: alerts, topAlert: topAlert, isActive: isActive,
-    filterRecs: filterRecs, stats: stats, findDuplicates: findDuplicates, can: can
+    filterRecs: filterRecs, stats: stats, findDuplicates: findDuplicates, can: can,
+    distM: distM, nearest: nearest, streetName: streetName, autoFill: autoFill, fromCabinet: fromCabinet, suggestLists: suggestLists
   };
 })();
 if (typeof module !== 'undefined' && module.exports) module.exports = Core;

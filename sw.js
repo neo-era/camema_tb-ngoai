@@ -1,5 +1,5 @@
 // Service worker: cache "app shell" (cache-first); KHÔNG can thiệp API Apps Script và ô bản đồ OpenStreetMap.
-const SHELL = 'tbngoai-v1.0.7';
+const SHELL = 'tbngoai-v1.0.8';
 const FILES = ['./', 'index.html', 'app.css', 'config.js', 'manifest.webmanifest', 'js/app.js', 'js/core.js', 'js/version.js', 'js/theme.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/exceljs.min.js', 'icons/icon-192.png', 'icons/icon-512.png'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting())); });
@@ -10,7 +10,7 @@ self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   if (u.hostname.endsWith('script.google.com') || u.hostname.endsWith('googleusercontent.com')) return; // API: luôn đi mạng
-  if (u.hostname.endsWith('tile.openstreetmap.org') || u.hostname === 'server.arcgisonline.com') return; // ô bản đồ: để trình duyệt tải trực tiếp (giữ Referer theo chính sách OSM)
+  if (u.hostname.endsWith('tile.openstreetmap.org') || u.hostname === 'server.arcgisonline.com' || u.hostname === 'geocode.arcgis.com') return; // ô bản đồ: để trình duyệt tải trực tiếp (giữ Referer theo chính sách OSM)
   if (u.origin !== location.origin) return;
   // config.js: mạng trước để nhận URL mới
   if (u.pathname.endsWith('/config.js')) {

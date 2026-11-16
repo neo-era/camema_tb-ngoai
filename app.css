@@ -231,3 +231,8 @@ body.picking .toasts { bottom: calc(var(--tab-h) + var(--sab) + 170px); }
   body.picking .toasts { left: calc((84px + var(--sal)) / 2 + 28%); width: min(420px, 50%); bottom: calc(var(--sab) + 16px); }
   .modal { max-height: 96dvh; }
 }
+
+/* Tự điền tuyến/tủ/trụ */
+.autonote { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; background: color-mix(in srgb, var(--acc) 10%, transparent); color: var(--fg); }
+.autonote .grow { flex: 1; min-width: 0; }
+.autonote .pill { flex: none; }
