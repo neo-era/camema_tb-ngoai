@@ -1,0 +1,84 @@
+# TBNgoài — Hướng dẫn triển khai & vận hành
+
+Phiên bản 1.0.0 · 16/11/2026
+
+## 1. Thành phần
+| Phần | Ở đâu | Ghi chú |
+|---|---|---|
+| Giao diện PWA | Thư mục `web/` → GitHub Pages (HTTPS) | Không chứa bí mật |
+| Máy chủ | `dist/Code.gs` → Apps Script gắn với 1 Google Sheet | Execute as: **Me**, Who has access: **Anyone** |
+| Dữ liệu | Google Sheet: ThietBi, TaiKhoan, CauHinh, NhatKy, GopY, Anh | **Không chia sẻ** Sheet cho nhân viên |
+| Ảnh | Thư mục Drive "TBNgoai - Ảnh hiện trường" (riêng tư) | Xem ảnh qua app |
+| Sao lưu | Thư mục Drive "TBNgoai - Sao lưu" | Tự chạy 1 giờ sáng, giữ 30 bản; ảnh không gắn bản ghi nào quá 30 ngày thì tự dọn |
+
+Tài khoản chủ script: dùng **tài khoản Google của đơn vị** (bật xác minh 2 bước), không dùng tài khoản cá nhân của nhân viên.
+
+## 2. Cài máy chủ (15 phút)
+1. Tạo Google Sheet mới, đặt tên `TBNgoai - Du lieu`.
+2. Trong Sheet, chọn **Tiện ích mở rộng → Apps Script**. Xoá nội dung `Code.gs`, dán toàn bộ file `dist/Code.gs` vào, rồi bấm **Lưu**.
+3. Chọn hàm `setup` → **Chạy** → cấp quyền khi được hỏi. Mở **Nhật ký thực thi** để lấy dòng `Tài khoản: admin — Mật khẩu tạm: …`.
+4. Chọn hàm `benchmarkHash` → **Chạy**. Hàm này tự đặt số vòng băm mật khẩu sao cho mỗi lần đăng nhập mất khoảng 1 giây.
+5. Chọn **Triển khai → Triển khai mới → Ứng dụng web**:
+   - Thực thi dưới dạng: **Tôi**
+   - Người có quyền truy cập: **Bất kỳ ai**
+   - Bấm **Triển khai**, sau đó sao chép URL kết thúc bằng `/exec`.
+6. Mở URL đó trên trình duyệt. Nếu thấy `{"ok":true,…"app":"TBNgoai"}` là máy chủ đã chạy.
+
+> **Cập nhật code lần sau:** vào **Triển khai → Quản lý bản triển khai → ✏️ → Phiên bản mới**. Cách này giữ nguyên URL. Không dùng URL `/dev`.
+
+## 3. Đưa giao diện lên GitHub Pages
+1. Sửa `web/config.js`: dán URL `/exec` vào `SCRIPT_URL`; `KY_GIAM_DOC` là tên in ở khối ký trên Excel. Nếu để trống thì người dùng phải tự dán URL ở màn đăng nhập.
+2. Tạo repo `neo-era/tb-ngoai`, đẩy **nội dung thư mục `web/`** lên nhánh `main`.
+3. Vào **Settings → Pages → Deploy from branch → main / (root)**. Địa chỉ app sẽ là `https://neo-era.github.io/tb-ngoai/`.
+
+## 4. Tạo tài khoản
+1. Đăng nhập bằng `admin` và mật khẩu tạm, rồi đổi mật khẩu ngay.
+2. Vào **Khác → Quản lý tài khoản → +** (tài khoản dùng mật khẩu tạm bị chặn mọi thao tác cho tới khi đổi mật khẩu), tạo tài khoản cho từng người:
+   - **Nhập liệu**: tổ/xí nghiệp. Phải chọn quận được giao; người này chỉ thêm/sửa được bản ghi trong các quận đó.
+   - **Giám sát**: phòng Kỹ thuật/An toàn. Xem và sửa toàn KVTT, xoá, cập nhật xử lý.
+   - **Chỉ xem**: lãnh đạo, xem thống kê.
+3. Mật khẩu tạm chỉ hiện **một lần**. Sao chép và gửi riêng cho từng người. Lần đăng nhập đầu, người dùng sẽ được yêu cầu đổi mật khẩu.
+4. Khi khoá tài khoản, đổi vai trò hoặc đổi quận, phiên đăng nhập cũ của người đó tự hết hiệu lực.
+
+## 5. Cài app lên máy
+- **Android / Chrome / Edge trên máy tính:** mở link → bấm **Cài đặt** (hoặc menu → Cài đặt ứng dụng).
+- **iPhone / iPad:** mở bằng Safari → **Chia sẻ → Thêm vào MH chính**.
+
+## 6. Chỉnh ngưỡng cảnh báo
+Sửa cột `gia_tri` trong sheet **CauHinh**. App tự áp dụng ở lần đồng bộ sau.
+| khoa | Mặc định | Ý nghĩa |
+|---|---|---|
+| vb_nhac_ngay | 60 | Nhắc văn bản sắp hết hạn |
+| nguy_hiem_gio | 24 | Mức Nguy hiểm phải xử lý trong (giờ, tính từ lúc phát hiện) |
+| can_kp_ngay | 30 | Cần khắc phục quá số ngày này (tính từ lúc phát hiện) thì chuyển đỏ |
+| dat_kt_ngay | 180 | Bản ghi mức Đạt cần kiểm tra lại sau |
+| dang_tt_ngay | 60 | Đang làm thủ tục quá số ngày này thì cảnh báo |
+| le_hoi_nhac_ngay | 3 | Nhắc trước ngày tháo đèn lễ hội |
+| le_hoi_qua_ngay | 1 | Quá ngày tháo thì cảnh báo đỏ |
+
+> Các con số trên là **đề xuất theo thực tiễn vận hành**, cần Phòng Kỹ thuật xác nhận.
+
+## 7. Vận hành hằng ngày
+- **Tổ hiện trường:**
+  - Bấm **+**. GPS tự lấy.
+  - Nhập theo thứ tự: quận/phường → tuyến/tủ/trụ → nhóm/loại → đơn vị → **An toàn** (kèm ảnh) → **Nguồn** → **Pháp lý** → Lưu.
+  - Khi mất mạng vẫn lưu được; app tự gửi khi có mạng (góc trên hiện "n chờ gửi").
+- **Phân quyền xử lý:** chỉ Giám sát/Quản trị cập nhật được "Tình hình xử lý" (Nhập liệu không tự đóng cảnh báo được). Hạn xử lý an toàn tính từ **lúc phát hiện**; bấm "Kiểm tra lại – không đổi" không làm mới hạn.
+- **Giám sát:**
+  - Mở tab **Thống kê** và xử lý mục **Cần xử lý**.
+  - Mở bản ghi → **Sửa / cập nhật xử lý**: đã thông báo (số công văn, hạn), đã khắc phục, đã tháo, đã chuyển cơ quan chức năng.
+  - Cảnh báo tự đóng khi đã xử lý xong.
+- **Gửi công văn hàng loạt:** vào **Thống kê → Xếp hạng vi phạm → Đề nghị KP** để xuất Excel danh sách vi phạm của từng đơn vị, đính kèm công văn.
+- **Tuyến cáp hoặc đèn dây chạy qua nhiều trụ:** chỉ ghi **1 bản ghi**, gồm trụ đầu, trụ cuối và số trụ đi qua.
+- **Góp ý của người dùng:** xem trong sheet **GopY**. Xử lý xong thì đổi cột `status` thành `da_xu_ly` và ghi cách xử lý vào `note`.
+
+## 8. Kiểm thử (dành cho người phát triển)
+```
+npm test                 # build + 66 test lõi & máy chủ (giả lập Apps Script)
+node test/ui.e2e.mjs     # 34 kiểm tra giao diện Chromium, ảnh ở test/shots/
+```
+Lõi nghiệp vụ `src/core.js` được nhúng vào cả `dist/Code.gs` lẫn `web/js/core.js` qua `tools/build.mjs`. Chỉ sửa ở `src/`, sau đó chạy `npm run build`.
+
+## 9. Chưa kiểm trên hệ thống thật (cần anh thử khi triển khai)
+- Apps Script, Drive và Sheet thật: thời gian đăng nhập sau `benchmarkHash`; giới hạn kích thước gửi ảnh (~800 KB); thời gian giữ lock khi Sheet có hàng nghìn dòng.
+- Điện thoại thật: GPS ngoài trời, chụp ảnh bằng camera, cài PWA trên iPhone (Safari) và Android, chạy offline ngoài hiện trường.
