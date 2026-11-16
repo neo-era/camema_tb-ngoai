@@ -332,3 +332,25 @@ test('capLaiMatKhauAdmin cấp mật khẩu tạm mới, phiên cũ hết hạn'
   const r = env.call('login', { uid: 'admin', pw });
   assert.equal(r.ok, true); assert.equal(r.data.must_change, true);
 });
+
+test('ảnh: thư mục con theo tháng, tên + mô tả có thời gian/tọa độ/người; sheet Anh lưu đủ', () => {
+  const r = env.call('uploadPhoto', { photo_client_id: crypto.randomUUID(), b64: JPEG(500), meta: { chup_luc: '2026-11-16T07:05:09Z', lat: 10.7769, lng: 106.7009, gps_acc: 8 } }, nlTok);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const f = env.files[r.data.file_id];
+  assert.equal(f.parent.name, '2026-11');
+  assert.match(f.getName(), /^TB_20261116_140509_to1_/);
+  assert.match(f.desc, /Thời gian chụp: 16\/11\/2026 14:05:09/); assert.match(f.desc, /Tọa độ: 10\.776900, 106\.700900 \(±8 m\)/); assert.match(f.desc, /Người cập nhật: .*to1/);
+  const row = env.sheets.Anh.data.at(-1);
+  assert.deepEqual([...env.sheets.Anh.data[0]].slice(5), ['chup_luc', 'lat', 'lng', 'gps_acc', 'ten_file', 'thu_muc']);
+  assert.deepEqual([row[2], row[6], row[7], row[8], row[10]], ['to1', 10.7769, 106.7009, 8, '2026-11']);
+  // tọa độ ngoài TP / thời gian tương lai bị bỏ
+  const r2 = env.call('uploadPhoto', { photo_client_id: crypto.randomUUID(), b64: JPEG(500), meta: { chup_luc: '2099-01-01T00:00:00Z', lat: 21, lng: 105 } }, nlTok);
+  const row2 = env.sheets.Anh.data.at(-1);
+  assert.equal(row2[6], ''); assert.notEqual(row2[10], '2099-01');
+});
+test('sheet Anh tạo từ bản cũ được bổ sung tiêu đề cột', () => {
+  const e2 = makeEnv(); e2.sheets.Anh = undefined;
+  e2.ctx.SpreadsheetApp.getActiveSpreadsheet().insertSheet('Anh').appendRow(['photo_client_id', 'file_id', 'uid', 'luc', 'bytes']);
+  e2.ctx.sh_('Anh');
+  assert.equal(e2.sheets.Anh.data[0].length, 11);
+});

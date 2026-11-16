@@ -52,13 +52,14 @@ export function makeEnv() {
   };
   const mkFile = (b, name) => {
     const id = 'F' + crypto.randomBytes(8).toString('hex');
-    const f = { id, trashed: false, blob: b, created: new Date(), getId: () => id, setTrashed: (t) => { f.trashed = t; }, getBlob: () => b, getDateCreated: () => f.created,
+    const f = { id, trashed: false, blob: b, created: new Date(), desc: '', getId: () => id, setTrashed: (t) => { f.trashed = t; }, getBlob: () => b, getDateCreated: () => f.created, setDescription: (d) => { f.desc = d; return f; }, getName: () => b.getName(),
       makeCopy: (n, folder) => folder.createFile(blob([], 'x', n)) };
     files[id] = f; return f;
   };
   const mkFolder = (name) => {
     const id = 'D' + crypto.randomBytes(6).toString('hex'); const list = [];
-    const f = { id, name, list, getId: () => id, createFile: (b) => { const x = mkFile(b); list.push(x); return x; },
+    const f = { id, name, list, subs: [], getId: () => id, createFile: (b) => { const x = mkFile(b); x.parent = f; list.push(x); return x; },
+      createFolder: (n) => { const d = mkFolder(n); f.subs.push(d); return d; }, getFoldersByName: (n) => { const l = f.subs.filter((d) => d.name === n); let i = 0; return { hasNext: () => i < l.length, next: () => l[i++] }; },
       getFiles: () => { let i = 0; const l = list.filter((x) => !x.trashed); return { hasNext: () => i < l.length, next: () => l[i++] }; } };
     folders[id] = f; return f;
   };
@@ -79,7 +80,7 @@ export function makeEnv() {
       base64Encode: (b) => toBuf(b).toString('base64'),
       base64Decode: (s) => { if (!/^[A-Za-z0-9+/=]*$/.test(s)) throw new Error('bad'); return toSigned(Buffer.from(s, 'base64')); },
       getUuid: () => crypto.randomUUID(),
-      formatDate: (d, tz, f) => new Date(d.getTime() + 7 * 3600e3).toISOString().slice(0, 10)
+      formatDate: (d, tz, f) => { const x = new Date(d.getTime() + 7 * 3600e3).toISOString(); return f.replace('yyyy', x.slice(0, 4)).replace('MM', x.slice(5, 7)).replace('dd', x.slice(8, 10)).replace('HH', x.slice(11, 13)).replace('mm', x.slice(14, 16)).replace('ss', x.slice(17, 19)); }
     },
     DriveApp: {
       createFolder: mkFolder,

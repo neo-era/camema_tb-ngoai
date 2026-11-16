@@ -119,6 +119,11 @@ try {
   assert.equal(mine.tu, 'HBT-05'); assert.equal(mine.so_luong, 2); assert.equal(mine.anh.length, 1); assert.ok(mine.lat > 10.7);
   assert.equal(mine.tao_boi, 'to1');
   ok('Thêm bản ghi đủ trường + ảnh → lên máy chủ đúng (tủ chữ HOA, SL 2, 1 ảnh, GPS)');
+  const arow = env.sheets.Anh.data.find((r) => r[1] === mine.anh[0]);
+  assert.equal(arow[2], 'to1'); assert.ok(arow[6] > 10.7 && arow[7] > 106.6, 'ảnh có tọa độ'); assert.match(arow[9], /^TB_\d{8}_\d{6}_to1_/);
+  assert.match(env.files[mine.anh[0]].desc, /Người cập nhật: Tổ CS Quận 1 \(to1\)/);
+  const { writeFileSync } = await import('node:fs'); writeFileSync(ROOT + 'test/shots/anh-dong-dau.jpg', Buffer.from(env.files[mine.anh[0]].getBlob().getBytes().map((b) => b & 255)));
+  ok('Ảnh lưu thư mục tháng, tên + mô tả + sheet Anh có thời gian/tọa độ/người cập nhật');
   assert.match(await page.locator('#lst .it').first().textContent(), /Nghi đấu trước contactor/); ok('Thẻ hiện cảnh báo nặng nhất: đấu trước contactor');
 
   // Trùng
@@ -208,7 +213,11 @@ try {
       if (route === '#/form') await p.waitForSelector('#frm');
       await noOverflow(p, `${name} ${sz} ${theme}`);
       if (route === '#/list') { await noOverlap(p, '.fab', '.tabs', `${sz}`); }
-      if (route === '#/map') { await noOverlap(p, '.map-top', '.drawer', `map ${sz}`); await noOverlap(p, '.locate', '.drawer', `map ${sz}`); }
+      if (route === '#/map') { await noOverlap(p, '.map-top', '.drawer', `map ${sz}`); await noOverlap(p, '.locate', '.drawer', `map ${sz}`); await noOverlap(p, '.map-add', '.drawer', `map+ ${sz}`); await noOverlap(p, '.map-add', '.locate', `map+ ${sz}`); await noOverlap(p, '.map-add', '.map-top', `map+ ${sz}`);
+        await p.click('#b-madd'); await p.waitForTimeout(400);
+        await noOverlap(p, '.pickbar', '.crosshair', `pick ${sz}`); await noOverlap(p, '.pickbar', '.map-top', `pick ${sz}`);
+        await p.screenshot({ path: `${ROOT}test/shots/m-mapadd-${sz}-${theme}.png` });
+        await p.click('#pick-no'); }
       if (route === '#/form' && sz === 'ngang') { assert.ok(await p.locator('.head-save').isVisible(), 'ngang: nút Lưu ở header'); }
       await p.screenshot({ path: `${ROOT}test/shots/m-${name}-${sz}-${theme}.png` });
     }
@@ -230,6 +239,22 @@ try {
   await p4.reload(); await p4.evaluate(() => navigator.serviceWorker.ready); await c4.setOffline(true); await p4.reload();
   await p4.waitForSelector('#lf'); ok('Tắt mạng mở lại: shell vẫn chạy (cache SW)');
   await c4.close();
+
+  // ===== 4b. Thêm thiết bị trên bản đồ =====
+  const c7 = await newCtx(); const p7 = await c7.newPage(); watch(p7);
+  await login(p7, 'to1');
+  await p7.evaluate(() => (location.hash = '#/map')); await p7.waitForSelector('.leaflet-marker-icon');
+  await p7.evaluate(() => window.__tbn.S.map ? 0 : 0);
+  await p7.click('#b-madd'); await p7.waitForSelector('.pickbar', { state: 'visible' });
+  await p7.evaluate(() => { /* đưa tâm ngắm về Q.1 */ });
+  await p7.click('#pick-ok'); await p7.waitForSelector('#frm');
+  const pf = await p7.evaluate(() => ({ lat: window.__tbn.S.form.lat, acc: window.__tbn.S.form.gps_acc, picked: window.__tbn.S.form._picked }));
+  assert.ok(pf.lat > 10.3 && pf.lat < 11.2 && pf.picked === true && pf.acc > 0 && pf.acc <= 30, JSON.stringify(pf));
+  assert.match(await p7.textContent('.gps'), /chọn trên bản đồ/);
+  await p7.waitForTimeout(1500); // GPS tự động không được ghi đè vị trí đã chọn
+  assert.equal(await p7.evaluate(() => window.__tbn.S.form.lat), pf.lat);
+  ok(`Thêm trên bản đồ: tâm ngắm → form có tọa độ ${pf.lat.toFixed(5)} (±${pf.acc} m), không bị GPS ghi đè`);
+  await c7.close();
 
   // ===== 5. Mật khẩu tạm khi còn hàng chờ: không làm hỏng hàng chờ, chỉ 1 hộp đổi mật khẩu =====
   const c5 = await newCtx(); const p5 = await c5.newPage(); watch(p5);

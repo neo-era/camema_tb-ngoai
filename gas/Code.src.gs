@@ -19,7 +19,7 @@ var SHEETS = {
   CauHinh: ['khoa', 'gia_tri', 'ghi_chu'],
   NhatKy: ['luc', 'uid', 'hanh_dong', 'id', 'truong', 'cu', 'moi'],
   GopY: ['luc', 'client_id', 'uid', 'sao', 'loai', 'noi_dung', 'phien_ban', 'thiet_bi', 'man_hinh', 'vi_tri', 'status', 'note'],
-  Anh: ['photo_client_id', 'file_id', 'uid', 'luc', 'bytes']
+  Anh: ['photo_client_id', 'file_id', 'uid', 'luc', 'bytes', 'chup_luc', 'lat', 'lng', 'gps_acc', 'ten_file', 'thu_muc']
 };
 var LIMIT_NORMAL = 64 * 1024, LIMIT_PHOTO = 900 * 1024, PHOTO_MAX = 600 * 1024;
 var TOKEN_TTL_MS = 12 * 3600e3, PW_ITER_DEFAULT = 5000, LOGIN_PER_MIN = 30;
@@ -80,8 +80,14 @@ function ss_() { return SpreadsheetApp.getActiveSpreadsheet() || SpreadsheetApp.
 function sh_(name) {
   var s = ss_().getSheetByName(name);
   if (!s) { s = ss_().insertSheet(name); s.getRange(1, 1, 1, SHEETS[name].length).setValues([SHEETS[name]]); textFormat_(s, name); }
+  else if (!HEADER_OK_[name]) { // sheet tạo từ bản cũ: bổ sung tiêu đề cột mới (không đụng dữ liệu)
+    var n = s.getLastColumn(), cols = SHEETS[name];
+    if (n < cols.length) s.getRange(1, n + 1, 1, cols.length - n).setValues([cols.slice(n)]);
+  }
+  HEADER_OK_[name] = true;
   return s;
 }
+var HEADER_OK_ = {};
 /** Ép định dạng VĂN BẢN (@) cho cột chuỗi/ngày để Sheets không tự đổi '012' → 12, '2026-01-05' → ô ngày, SĐT mất số 0. */
 function textFormat_(s, name) {
   var cols = SHEETS[name], rows = Math.max(s.getMaxRows ? s.getMaxRows() : 1000, 1000);
@@ -306,7 +312,7 @@ function save_(user, p, requestId) {
   var v = Core.validate(clean, { dm: Core.DM });
   if (!v.ok) throw fail_('VALIDATION', v.errors.map(function (e) { return e.msg; }).join('; '), { errors: v.errors });
   var rec = v.rec;
-  if (rec.anh.length > 3) throw fail_('VALIDATION', 'Tối đa 3 ảnh');
+  if (rec.anh.length > 5) throw fail_('VALIDATION', 'Tối đa 5 ảnh');
   if (rec.anh.length) {
     var known = {}; readAll_('Anh').forEach(function (a) { known[String(a.file_id)] = 1; });
     rec.anh.forEach(function (f) { if (!known[f]) throw fail_('VALIDATION', 'Ảnh không hợp lệ hoặc chưa tải lên xong'); });
@@ -422,13 +428,28 @@ function uploadPhoto_(user, p) {
   if (b0 === 0xFF && b1 === 0xD8 && b2 === 0xFF) mime = 'image/jpeg';
   else if (b0 === 0x89 && b1 === 0x50 && b2 === 0x4E && b3 === 0x47) mime = 'image/png';
   else throw fail_('VALIDATION', 'Chỉ nhận ảnh JPEG hoặc PNG');
-  var file = folder_().createFile(Utilities.newBlob(bytes, mime, pcid + (mime === 'image/png' ? '.png' : '.jpg')));
+  // Thông tin ảnh (thời gian chụp, tọa độ) do máy chụp gửi kèm; người cập nhật lấy từ phiên đăng nhập
+  var m = p.meta || {}, chup = Date.parse(m.chup_luc) ? new Date(Date.parse(m.chup_luc)) : new Date();
+  if (chup.getTime() > Date.now() + 10 * 60000) chup = new Date();
+  var lat = Number(m.lat), lng = Number(m.lng), acc = Number(m.gps_acc);
+  var hasXY = m.lat !== '' && m.lat != null && lat >= 10.3 && lat <= 11.2 && lng >= 106.3 && lng <= 107.1;
+  var thang = Utilities.formatDate(chup, 'Asia/Ho_Chi_Minh', 'yyyy-MM');
+  var name = 'TB_' + Utilities.formatDate(chup, 'Asia/Ho_Chi_Minh', 'yyyyMMdd_HHmmss') + '_' + user.uid + '_' + pcid.slice(0, 8) + (mime === 'image/png' ? '.png' : '.jpg');
+  var file = monthFolder_(thang).createFile(Utilities.newBlob(bytes, mime, name));
+  file.setDescription(['TBNgoài – ảnh thiết bị', 'Thời gian chụp: ' + Utilities.formatDate(chup, 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy HH:mm:ss'),
+    'Tọa độ: ' + (hasXY ? lat.toFixed(6) + ', ' + lng.toFixed(6) + (acc > 0 ? ' (±' + Math.round(acc) + ' m)' : '') : 'chưa có'),
+    'Người cập nhật: ' + (user.ho_ten ? user.ho_ten + ' (' + user.uid + ')' : user.uid)].join('\n'));
   return withLock_(function () {
     var again = readAll_('Anh').filter(function (a) { return String(a.photo_client_id) === pcid; })[0];
     if (again) { file.setTrashed(true); return { file_id: String(again.file_id), replay: true }; }
-    sh_('Anh').appendRow([pcid, file.getId(), user.uid, nowIso_(), bytes.length]);
+    sh_('Anh').appendRow([pcid, file.getId(), user.uid, nowIso_(), bytes.length, chup.toISOString(), hasXY ? lat : '', hasXY ? lng : '', acc > 0 ? Math.round(acc) : '', name, thang]);
     return { file_id: file.getId() };
   });
+}
+/** Thư mục con theo tháng trong thư mục ảnh riêng (VD "2026-11"). */
+function monthFolder_(thang) {
+  var root = folder_(), it = root.getFoldersByName(thang);
+  return it.hasNext() ? it.next() : root.createFolder(thang);
 }
 function getPhoto_(user, p) {
   need_(Core.can(user, 'read'));

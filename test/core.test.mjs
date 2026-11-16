@@ -306,3 +306,10 @@ test('rowSane: dòng sửa tay sai bị loại', () => {
   assert.equal(C.rowSane({ ...base(), so_luong: 'hai' }), false);
   assert.equal(C.rowSane({ ...base(), an_toan: 'tot' }), false);
 });
+
+test('photoStamp: thời gian giờ VN, tọa độ, người cập nhật, vị trí', () => {
+  const L = C.photoStamp({ luc: '2026-11-16T07:05:09Z', lat: 10.7769012, lng: 106.7009, acc: 8.4, ho_ten: 'Tổ CS Q1', uid: 'to1', so_tru: '12', tu: 'LL-02', tuyen: 'Lê Lợi' });
+  assert.deepEqual(L, ['Thời gian: 16/11/2026 14:05:09', 'Tọa độ: 10.776901, 106.700900 (±8 m)', 'Người cập nhật: Tổ CS Q1 (to1)', 'Vị trí: Trụ 12 · Tủ LL-02 · Lê Lợi']);
+  assert.equal(C.photoStamp({ luc: '2026-11-16T07:05:09Z', lat: '', uid: 'to1' })[1], 'Tọa độ: chưa có');
+  assert.equal(C.photoStamp({ luc: '2026-11-16T07:05:09Z', uid: 'to1' }).length, 3);
+});
