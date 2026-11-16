@@ -1,6 +1,6 @@
 # TBNgoài — Hướng dẫn triển khai & vận hành
 
-Phiên bản 1.0.7 · 16/11/2026
+Phiên bản 1.0.8 · 16/11/2026
 
 ## 1. Thành phần
 | Phần | Ở đâu | Ghi chú |
@@ -100,10 +100,20 @@ Sửa cột `gia_tri` trong sheet **CauHinh**. App tự áp dụng ở lần đ�
   - Bấm **+** trên bản đồ → kéo bản đồ cho tâm ngắm trùng vị trí trụ → **Thêm tại đây**. Phải phóng to từ mức 16 trở lên.
   - Trên máy tính có thể bấm chuột phải ngay vào vị trí.
 
+## 9b. Tự điền Tuyến đường / Tủ / Số trụ (từ 1.0.8)
+- **Theo vị trí** (khi thêm mới, sau khi lấy GPS hoặc chọn trên bản đồ):
+  - Có thiết bị đã nhập cách ≤ 12 m (coi là cùng trụ) → điền tuyến, tủ, **số trụ**, quận/phường.
+  - Cách 12–60 m → điền tuyến, tủ, quận/phường (không điền số trụ).
+  - Không có thiết bị gần → tra tên đường trên bản đồ Esri (bỏ số nhà, chữ "Đường").
+- **Khi gõ:** ô Tuyến/Tủ/Số trụ có danh sách gợi ý từ dữ liệu đã có (tuyến ưu tiên cùng quận, tủ ưu tiên cùng tuyến, số trụ là các trụ đã có thiết bị của tủ đó). Gõ tủ đã biết → tự điền tuyến, quận/phường; chọn tuyến chỉ có 1 tủ → tự điền tủ.
+- Chỉ ghi vào ô trống hoặc ô máy đã tự điền, **không đè ô người dùng đã gõ**. Dòng ghi chú cho biết nguồn; nút **Bỏ tự điền** xoá các ô tự điền.
+- Sửa bản ghi: không tự điền khi mở; bấm "Lấy lại" GPS thì chỉ điền ô đang trống.
+- Máy chủ không đổi (không cần triển khai lại Apps Script).
+
 ## 10. Kiểm thử (dành cho người phát triển)
 ```
-npm test                 # build + 70 test lõi & máy chủ (giả lập Apps Script)
-node test/ui.e2e.mjs     # 36 kiểm tra giao diện Chromium, ảnh ở test/shots/
+npm test                 # build + 79 test lõi & máy chủ (giả lập Apps Script)
+node test/ui.e2e.mjs     # 40 kiểm tra giao diện Chromium, ảnh ở test/shots/
 ```
 Lõi nghiệp vụ `src/core.js` được nhúng vào cả `dist/Code.gs` lẫn `web/js/core.js` qua `tools/build.mjs`. Chỉ sửa ở `src/`, sau đó chạy `npm run build`.
 
