@@ -313,3 +313,72 @@ test('photoStamp: thời gian giờ VN, tọa độ, người cập nhật, vị
   assert.equal(C.photoStamp({ luc: '2026-11-16T07:05:09Z', lat: '', uid: 'to1' })[1], 'Tọa độ: chưa có');
   assert.equal(C.photoStamp({ luc: '2026-11-16T07:05:09Z', uid: 'to1' }).length, 3);
 });
+
+// ---------- tự điền vị trí ----------
+const R = (o) => ({ id: o.id || 'r' + Math.random(), quan: 'Q1', phuong: 'Bến Thành', tuyen: 'Lê Lợi', tu: 'LL-02', so_tru: '12', loai: 'Camera', don_vi: 'Công an', trang_thai: 'dang_lap', lat: 10.7725, lng: 106.6980, ...o });
+const off = (m) => m / 111320; // m → độ vĩ
+
+test('distM: 1 phút vĩ ≈ 1852 m', () => {
+  assert.ok(Math.abs(C.distM(10, 106, 10 + 1 / 60, 106) - 1843) < 15);
+});
+
+test('autoFill: cùng trụ (≤12 m) điền tủ + trụ + tuyến + quận/phường vào ô trống', () => {
+  const recs = [R({})];
+  const r = C.autoFill({ lat: 10.7725 + off(5), lng: 106.6980, tuyen: '', tu: '', so_tru: '', quan: '' }, recs);
+  assert.deepEqual(r.patch, { tuyen: 'Lê Lợi', tu: 'LL-02', so_tru: '12', quan: 'Q1', phuong: 'Bến Thành' });
+  assert.equal(r.src.kind, 'tru'); assert.equal(r.src.d, 5);
+});
+
+test('autoFill: gần (12–60 m) chỉ điền tuyến + tủ, KHÔNG điền số trụ', () => {
+  const r = C.autoFill({ lat: 10.7725 + off(35), lng: 106.6980, quan: 'Q1', phuong: 'Bến Thành' }, [R({})]);
+  assert.deepEqual(r.patch, { tuyen: 'Lê Lợi', tu: 'LL-02' });
+  assert.equal(r.src.kind, 'gan');
+});
+
+test('autoFill: không đè ô người dùng đã gõ; đè ô do máy tự điền', () => {
+  const f = { lat: 10.7725, lng: 106.6980, tuyen: 'Pasteur', tu: 'PA-01', so_tru: '' };
+  assert.deepEqual(C.autoFill(f, [R({})]).patch, { so_tru: '12', quan: 'Q1', phuong: 'Bến Thành' });
+  assert.deepEqual(C.autoFill(f, [R({})], { auto: { tuyen: 1, tu: 1 } }).patch.tuyen, 'Lê Lợi');
+});
+
+test('autoFill: xa >60 m, bản ghi đã tháo/xoá, chính nó → không gợi ý; có tên đường bản đồ thì điền tuyến', () => {
+  const far = { lat: 10.7725 + off(100), lng: 106.6980 };
+  assert.deepEqual(C.autoFill(far, [R({})]).patch, {});
+  assert.deepEqual(C.autoFill({ lat: 10.7725, lng: 106.698 }, [R({ trang_thai: 'da_thao' }), R({ xoa: true })]).patch, {});
+  assert.deepEqual(C.autoFill({ id: 'me', lat: 10.7725, lng: 106.698 }, [R({ id: 'me' })]).patch, {});
+  const g = C.autoFill(far, [R({})], { street: 'Nguyễn Huệ' });
+  assert.deepEqual(g.patch, { tuyen: 'Nguyễn Huệ' }); assert.equal(g.src.kind, 'bando');
+  assert.deepEqual(C.autoFill({ ...far, tuyen: 'Pasteur' }, [], { street: 'Nguyễn Huệ' }).patch, {});
+});
+
+test('autoFill: không đổi quận khi người dùng đã chọn quận khác / quận ngoài phạm vi', () => {
+  assert.equal(C.autoFill({ lat: 10.7725, lng: 106.698, quan: 'Q3' }, [R({})]).patch.quan, undefined);
+  assert.equal(C.autoFill({ lat: 10.7725, lng: 106.698, quan: 'Q3' }, [R({})]).patch.phuong, undefined);
+  assert.equal(C.autoFill({ lat: 10.7725, lng: 106.698 }, [R({})], { quans: ['Q3'] }).patch.quan, undefined);
+  assert.equal(C.autoFill({ lat: '', lng: '' }, [R({})]).src, null);
+});
+
+test('streetName: bỏ số nhà, hẻm, chữ Đường; giao lộ lấy đường đầu', () => {
+  assert.equal(C.streetName({ Address: '123 Nguyễn Thị Minh Khai', AddNum: '123' }), 'Nguyễn Thị Minh Khai');
+  assert.equal(C.streetName({ Address: '45/2 Đường Lê Lợi' }), 'Lê Lợi');
+  assert.equal(C.streetName({ Address: 'Hẻm 12 Pasteur' }), 'Pasteur');
+  assert.equal(C.streetName({ Address: 'Lê Duẩn & Pasteur' }), 'Lê Duẩn');
+  assert.equal(C.streetName({ Address: '45 Đường Trần Hưng Đạo', AddNum: '45' }), 'Trần Hưng Đạo');
+  assert.equal(C.streetName({ Address: 'đường Pasteur' }), 'Pasteur');
+  assert.equal(C.streetName({ Address: '' }), '');
+  assert.equal(C.streetName(null), '');
+  assert.equal(C.streetName({ Address: '123' }), '');
+});
+
+test('fromCabinet + suggestLists', () => {
+  const recs = [R({ tu: 'll-02' }), R({ tu: 'LL-02', so_tru: '13', loai: 'Wifi', don_vi: 'Viettel' }), R({ tu: 'PA-01', tuyen: 'Pasteur', quan: 'Q3', phuong: 'Xuân Hòa' }), R({ tu: 'NH-01', tuyen: 'Nguyễn Huệ' })];
+  assert.deepEqual(C.fromCabinet(recs, ' ll-02 '), { tuyen: 'Lê Lợi', quan: 'Q1', phuong: 'Bến Thành', n: 2 });
+  assert.equal(C.fromCabinet(recs, 'XX'), null);
+  const s = C.suggestLists(recs, { quan: 'Q3', tuyen: 'pasteur', tu: 'LL-02' });
+  assert.equal(s.tuyen[0], 'Pasteur');
+  assert.equal(s.tu[0], 'PA-01');
+  assert.deepEqual(s.tu.slice().sort(), ['LL-02', 'NH-01', 'PA-01']);
+  assert.deepEqual(s.tru.map((x) => x.v), ['12', '13']);
+  assert.match(s.tru[0].label, /^1 TB: Camera – Công an/);
+  assert.deepEqual(C.suggestLists(recs, {}).tru, []);
+});

@@ -41,7 +41,7 @@ for (let i = 0; i < 40; i++) env.call('save', { rec: { client_id: crypto.randomU
 
 // ---- Trình duyệt ----
 const browser = await chromium.launch();
-let apiCalls = 0, offline = false;
+let apiCalls = 0, offline = false, geoCalls = 0;
 async function newCtx(opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, permissions: ['geolocation'], geolocation: { latitude: 10.7769, longitude: 106.7009, accuracy: 8 }, locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh', ...opts });
   await ctx.addInitScript((u) => localStorage.setItem('tbn_script_url', u), URL_API);
@@ -54,6 +54,7 @@ async function newCtx(opts = {}) {
   });
   await ctx.route('https://server.arcgisonline.com/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(TILE_PNG, 'hex') }));
   await ctx.route('https://tile.openstreetmap.org/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(TILE_PNG, 'hex') }));
+  await ctx.route('https://geocode.arcgis.com/**', (r) => { geoCalls++; r.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ address: { Address: '45 Đường Trần Hưng Đạo', AddNum: '45' }, location: {} }) }); });
   return ctx;
 }
 async function login(page, uid) {
@@ -257,6 +258,43 @@ try {
   assert.equal(await p7.evaluate(() => window.__tbn.S.form.lat), pf.lat);
   ok(`Thêm trên bản đồ: tâm ngắm → form có tọa độ ${pf.lat.toFixed(5)} (±${pf.acc} m), không bị GPS ghi đè`);
   await c7.close();
+
+  // ===== 4c. Tự điền tuyến / tủ / trụ =====
+  const c8 = await newCtx({ geolocation: { latitude: 10.7731 + 5 / 111320, longitude: 106.6993, accuracy: 6 } }); const p8 = await c8.newPage(); watch(p8);
+  await login(p8, 'to1');
+  await p8.evaluate(() => (location.hash = '#/form')); await p8.waitForSelector('#frm');
+  await p8.waitForFunction(() => window.__tbn.S.form && window.__tbn.S.form.so_tru === '12', null, { timeout: 20000 });
+  const af = await p8.evaluate(() => ({ t: document.querySelector('#i-tuyen').value, tu: document.querySelector('#i-tu').value, tr: document.querySelector('#i-so_tru').value, q: window.__tbn.S.form.quan, p: window.__tbn.S.form.phuong }));
+  assert.deepEqual(af, { t: 'Lê Lợi', tu: 'LL-02', tr: '12', q: 'Q1', p: 'Bến Thành' });
+  assert.match(await p8.textContent('.autonote'), /thiết bị cách 5 m/);
+  ok('Tự điền theo vị trí: cách 5 m → tuyến Lê Lợi, tủ LL-02, trụ 12, Q1/Bến Thành + ghi chú nguồn');
+  await p8.fill('#i-tu', 'NKKN-03'); await p8.dispatchEvent('#i-tu', 'change'); await p8.waitForTimeout(200);
+  const af2 = await p8.evaluate(() => ({ t: document.querySelector('#i-tuyen').value, q: window.__tbn.S.form.quan, p: window.__tbn.S.form.phuong, tru: [...document.querySelectorAll('#dl-tru option')].map((o) => o.value) }));
+  assert.deepEqual(af2, { t: 'Nam Kỳ Khởi Nghĩa', q: 'Q3', p: 'Xuân Hòa', tru: ['21'] });
+  ok('Gõ tủ NKKN-03 → tự cập nhật tuyến + quận/phường; gợi ý trụ đã có của tủ (21)');
+  await p8.fill('#i-tuyen', 'Pasteur'); await p8.fill('#i-tu', 'LL-02'); await p8.dispatchEvent('#i-tu', 'change'); await p8.waitForTimeout(200);
+  assert.equal(await p8.inputValue('#i-tuyen'), 'Pasteur', 'không đè tuyến người dùng gõ');
+  const opts = await p8.evaluate(() => [...document.querySelectorAll('#dl-tuyen option')].map((o) => o.value));
+  assert.ok(opts.includes('Lê Lợi') && opts.includes('3 Tháng 2'), opts.join());
+  ok('Không đè ô người dùng đã gõ; danh sách gợi ý tuyến có sẵn khi gõ');
+  await p8.click('#b-noauto'); await p8.waitForTimeout(150);
+  assert.equal(await p8.inputValue('#i-so_tru'), '', 'bỏ tự điền xoá trụ tự điền');
+  assert.equal(await p8.locator('.autonote').count(), 0);
+  await p8.screenshot({ path: ROOT + 'test/shots/tudien.png' });
+  await c8.close();
+  const c9 = await newCtx({ geolocation: { latitude: 10.7600, longitude: 106.6880, accuracy: 9 } }); const p9 = await c9.newPage(); watch(p9);
+  await login(p9, 'to1');
+  await p9.evaluate(() => (location.hash = '#/form')); await p9.waitForSelector('#frm');
+  await p9.focus('#i-mo_ta'); await p9.keyboard.type('Model X');
+  await p9.waitForFunction(() => window.__tbn.S.form._autoNote, null, { timeout: 20000 });
+  assert.equal(await p9.inputValue('#i-tuyen'), 'Trần Hưng Đạo'); assert.ok(geoCalls > 0);
+  assert.match(await p9.textContent('.autonote'), /bản đồ/);
+  assert.equal(await p9.evaluate(() => document.activeElement.id), 'i-mo_ta', 'giữ ô đang gõ');
+  await p9.keyboard.type(' Y'); assert.equal(await p9.inputValue('#i-mo_ta'), 'Model X Y');
+  ok('Không có thiết bị gần → tên đường theo bản đồ (bỏ số nhà, chữ Đường); không làm mất ô đang gõ');
+  await p9.setViewportSize({ width: 360, height: 640 }); await noOverflow(p9, 'tudien 360');
+  await p9.screenshot({ path: ROOT + 'test/shots/tudien-bando.png' });
+  await c9.close();
 
   // ===== 5. Mật khẩu tạm khi còn hàng chờ: không làm hỏng hàng chờ, chỉ 1 hộp đổi mật khẩu =====
   const c5 = await newCtx(); const p5 = await c5.newPage(); watch(p5);

@@ -416,9 +416,9 @@ async function openForm(id) {
   else {
     const last = (await DB.get('kv', 'lastEntry')) || {};
     const q = userQuans().includes(last.quan) ? last.quan : userQuans().length === 1 ? userQuans()[0] : '';
-    S.form = { client_id: uuid(), quan: q, phuong: q === last.quan ? last.phuong || '' : '', tuyen: last.tuyen || '', tu: last.tu || '', so_tru: '', so_luong: 1, van_de: [], anh: [], trang_thai: 'dang_lap', xu_ly: 'chua', an_toan: '', nguon: '', phap_ly: '' };
+    S.form = { client_id: uuid(), quan: q, phuong: q === last.quan ? last.phuong || '' : '', tuyen: last.tuyen || '', tu: last.tu || '', so_tru: '', so_luong: 1, _auto: { quan: 1, phuong: 1, tuyen: 1, tu: 1 }, van_de: [], anh: [], trang_thai: 'dang_lap', xu_ly: 'chua', an_toan: '', nguon: '', phap_ly: '' };
   }
-  S.form._draftKey = draftKey; S.form._photos = S.form._photos || [];
+  S.form._draftKey = draftKey; S.form._photos = S.form._photos || []; S.form._auto = S.form._auto || {};
   if (!id) applyPick(S.form);
   return S.form;
 }
@@ -440,6 +440,7 @@ routes['/form'] = async (app, q) => {
   }
   drawForm(app, q.id);
   if (!q.id && S.form.lat === undefined) getGps();
+  else if (!q.id && S.form._picked && !S.form._autoDone) runAutoFill(S.form);
 };
 function drawForm(app, id) {
   const f = S.form, nhom = DM.NHOM[f.nhom], isEdit = !!id;
@@ -455,8 +456,9 @@ function drawForm(app, id) {
     ${S.formErr.lat ? `<div class="err">${esc(S.formErr.lat)}</div>` : ''}</div><button type="button" class="pill" id="b-gps">${ic('sync')}${f.lat ? 'Lấy lại' : 'Lấy GPS'}</button></div>
   ${FL('quan', 'Quận (địa bàn cũ)', SEG('quan', quans, { cols: 3 }), { req: true, cls: 'full' })}
   ${phuongs ? FL('phuong', 'Phường', SEG('phuong', phuongs), { req: true, cls: 'full' }) : ''}
-  ${FL('tuyen', 'Tuyến đường', INP('tuyen', { ph: 'VD: Nguyễn Thị Minh Khai' }), { req: true })}
-  <div class="g2">${FL('tu', 'Tủ điều khiển', INP('tu', { up: true, ph: 'VD: NTMK-02' }), { req: f.nguon === 'luoi_cs' })}${FL('so_tru', 'Số trụ (đầu)', INP('so_tru', { up: true, ph: 'VD: 12' }), { req: true })}</div>
+  ${FL('tuyen', 'Tuyến đường', INP('tuyen', { ph: 'VD: Nguyễn Thị Minh Khai', list: 'dl-tuyen' }), { req: true })}
+  <div class="g2">${FL('tu', 'Tủ điều khiển', INP('tu', { up: true, ph: 'VD: NTMK-02', list: 'dl-tu' }), { req: f.nguon === 'luoi_cs' })}${FL('so_tru', 'Số trụ (đầu)', INP('so_tru', { up: true, ph: 'VD: 12', list: 'dl-tru' }), { req: true })}</div>
+  ${autoNoteHtml(f)}${suggestHtml(f)}
   <details class="full" ${f.so_tru_den ? 'open' : ''}><summary class="mut" style="min-height:44px;display:flex;align-items:center;cursor:pointer">Tuyến cáp / đèn dây qua nhiều trụ</summary>
     <div class="g2">${FL('so_tru_den', 'Trụ cuối', INP('so_tru_den', { up: true }))}${FL('so_tru_qua', 'Số trụ đi qua', INP('so_tru_qua', { type: 'number', mode: 'numeric' }))}</div></details>
   ${FL('nhom', 'Nhóm thiết bị', SEG('nhom', Object.fromEntries(Object.entries(DM.NHOM).map(([k, v]) => [k, v.ten]))), { req: true, cls: 'full' })}
@@ -516,12 +518,14 @@ function drawForm(app, id) {
 function wireForm(app, id) {
   const f = S.form, frm = $('#frm');
   const redraw = () => { const y = scrollY; drawForm(app, id); scrollTo(0, y); };
-  frm.addEventListener('input', (e) => { const k = e.target.dataset.in; if (!k) return; f[k] = e.target.value; if (S.formErr[k]) { delete S.formErr[k]; e.target.removeAttribute('aria-invalid'); } saveDraft(); });
+  frm.addEventListener('input', (e) => { const k = e.target.dataset.in; if (!k) return; f[k] = e.target.value; if (f._auto) delete f._auto[k]; if (S.formErr[k]) { delete S.formErr[k]; e.target.removeAttribute('aria-invalid'); } saveDraft(); });
+  frm.addEventListener('change', (e) => { const k = e.target.dataset.in; if (k === 'tuyen' || k === 'tu') onPlaceChange(k, redraw); });
   frm.addEventListener('click', (e) => {
     const s = e.target.closest('[data-seg]'), m = e.target.closest('[data-multi]'), st = e.target.closest('[data-step]'), rm = e.target.closest('[data-rmph]');
     if (s) {
       const k = s.dataset.seg; let v = s.dataset.v; if (v === 'true') v = true; else if (v === 'false') v = false;
       f[k] = f[k] === v && !['quan', 'nhom', 'an_toan', 'nguon', 'phap_ly', 'trang_thai'].includes(k) ? '' : v;
+      if (f._auto) { delete f._auto[k]; if (k === 'quan') delete f._auto.phuong; }
       if (k === 'quan') f.phuong = ''; if (k === 'nhom') f.loai = DM.NHOM[v].loai.length === 1 ? DM.NHOM[v].loai[0] : '';
       if (k === 'an_toan' && v === 'dat' && !(f.van_de || []).includes('ro_dien')) f.van_de = [];
       delete S.formErr[k]; saveDraft(); redraw();
@@ -533,6 +537,7 @@ function wireForm(app, id) {
     else if (rm) { const i = +rm.dataset.rmph; const a = f.anh[i]; f.anh.splice(i, 1); f._photos = (f._photos || []).filter((p) => 'local:' + p.pcid !== a); saveDraft(); redraw(); }
   });
   $('#b-gps').onclick = () => getGps(true);
+  const na = $('#b-noauto'); if (na) na.onclick = () => { for (const k of Object.keys(f._auto || {})) if (['tuyen', 'tu', 'so_tru'].includes(k)) f[k] = ''; f._auto = {}; f._autoNote = ''; saveDraft(); redraw(); };
   $('#b-vochu').onclick = () => { f.don_vi = DM.VO_CHU; delete S.formErr.don_vi; saveDraft(); redraw(); };
   const onPick = async (inp) => {
     const files = [...inp.files].slice(0, 5 - (f.anh || []).length); if (!files.length) return;
@@ -608,10 +613,91 @@ function compressImage(file, stamp) {
     img.src = url;
   });
 }
+
+// ---------------- Tự điền tuyến / tủ / trụ ----------------
+const AUTO_LBL = { tuyen: 'tuyến', tu: 'tủ', so_tru: 'số trụ', quan: 'quận', phuong: 'phường' };
+function autoNoteHtml(f) {
+  const n = f._autoNote; if (!n) return '';
+  return `<div class="autonote full" role="status">${ic('star')}<span class="grow">${esc(n)} — kiểm tra lại</span><button type="button" class="pill" id="b-noauto">Bỏ tự điền</button></div>`;
+}
+function suggestHtml(f) {
+  const s = C.suggestLists(allRecs(), f);
+  return `<datalist id="dl-tuyen">${s.tuyen.slice(0, 200).map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
+  <datalist id="dl-tu">${s.tu.slice(0, 200).map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
+  <datalist id="dl-tru">${s.tru.slice(0, 200).map((x) => `<option value="${esc(x.v)}" label="${esc(x.label)}">`).join('')}</datalist>`;
+}
+function refreshSuggest(f) {
+  const s = C.suggestLists(allRecs(), f), set = (id, h) => { const el = $('#' + id); if (el) el.innerHTML = h; };
+  set('dl-tu', s.tu.slice(0, 200).map((v) => `<option value="${esc(v)}">`).join(''));
+  set('dl-tru', s.tru.slice(0, 200).map((x) => `<option value="${esc(x.v)}" label="${esc(x.label)}">`).join(''));
+}
+/** Áp gợi ý: chỉ ô trống hoặc ô máy đã tự điền. Trả về danh sách ô đã đổi. */
+function applyAuto(f, patch) {
+  const changed = [];
+  for (const [k, v] of Object.entries(patch)) { if (f[k] !== v) { f[k] = v; changed.push(k); } f._auto[k] = 1; delete S.formErr[k]; }
+  return changed;
+}
+/** Gõ/chọn tủ → điền tuyến, quận, phường theo tủ đã biết; chọn tuyến chỉ có 1 tủ → điền tủ. */
+function onPlaceChange(k, redraw) {
+  const f = S.form; if (!f) return; f._auto = f._auto || {};
+  const free = (x) => !String(f[x] ?? '').trim() || f._auto[x];
+  const patch = {};
+  if (k === 'tu') {
+    const c = C.fromCabinet(allRecs(), f.tu);
+    if (c) {
+      if (c.tuyen && free('tuyen')) patch.tuyen = c.tuyen;
+      if (c.quan && userQuans().includes(c.quan) && free('quan')) { patch.quan = c.quan; if (c.phuong && (free('phuong') || f.quan !== c.quan)) patch.phuong = c.phuong; }
+    }
+  } else if (k === 'tuyen' && free('tu')) {
+    const tus = [...new Set(allRecs().filter((r) => C.isActive(r) && C.fold(r.tuyen) === C.fold(f.tuyen) && String(r.tu || '').trim()).map((r) => C.upperCode(r.tu).replace(/\s+/g, '')))];
+    if (tus.length === 1) patch.tu = tus[0];
+  }
+  const ch = applyAuto(f, patch);
+  if (ch.length) { f._autoNote = `Tự điền ${ch.map((x) => AUTO_LBL[x]).join(', ')} theo ${k === 'tu' ? 'tủ ' + C.upperCode(f.tu) : 'tuyến ' + f.tuyen} đã có`; saveDraft(); redraw(); }
+  else refreshSuggest(f);
+}
+const geoCache = new Map();
+/** Tra tên đường theo toạ độ (Esri World Geocoder). Lỗi/mất mạng → ''. */
+async function reverseStreet(lat, lng) {
+  const key = Number(lat).toFixed(4) + ',' + Number(lng).toFixed(4);
+  if (geoCache.has(key)) return geoCache.get(key);
+  if (!navigator.onLine) return '';
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 6000);
+  try {
+    const u = `https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?f=json&langCode=vi&featureTypes=StreetAddress,StreetName,StreetInt,PointAddress&location=${Number(lng)},${Number(lat)}`;
+    const r = await fetch(u, { signal: ctl.signal, credentials: 'omit' });
+    const j = await r.json();
+    const st = C.streetName(j && j.address);
+    geoCache.set(key, st); return st;
+  } catch (e) { return ''; } finally { clearTimeout(tm); }
+}
+/** Tự điền theo vị trí: thiết bị đã có gần đó; nếu không có thì tên đường trên bản đồ. */
+async function runAutoFill(f, { force = false } = {}) {
+  if (!f || !f.lat || (f._for !== 'new' && !force)) return;
+  f._autoDone = true; f._auto = f._auto || {};
+  const opt = { auto: f._auto, quans: userQuans() };
+  let r = C.autoFill(f, allRecs(), opt);
+  if (!r.src) { const st = await reverseStreet(f.lat, f.lng); if (st) r = C.autoFill(f, [], { ...opt, street: st }); }
+  if (S.form !== f) return;
+  const ch = applyAuto(f, r.patch);
+  if (!ch.length) return;
+  f._autoNote = r.src.kind === 'bando' ? `Tên đường lấy theo bản đồ (Esri)` :
+    `Tự điền ${ch.map((x) => AUTO_LBL[x]).join(', ')} theo thiết bị cách ${r.src.d} m (Trụ ${r.src.r.so_tru || '?'}${r.src.r.tu ? ' · Tủ ' + r.src.r.tu : ''})`;
+  saveDraft();
+  if (curView === '/form') redrawForm();
+}
+/** Vẽ lại form mà không làm mất ô đang gõ (giữ focus + vị trí con trỏ). */
+function redrawForm() {
+  const a = document.activeElement, id = a && a.id && a.closest && a.closest('#frm') ? a.id : '';
+  let sel = null; try { sel = id ? [a.selectionStart, a.selectionEnd] : null; } catch (e) {}
+  const y = scrollY; drawForm($('#app'), parseHash().q.id); scrollTo(0, y);
+  const b = id && document.getElementById(id);
+  if (b) { b.focus({ preventScroll: true }); try { if (sel && sel[0] != null) b.setSelectionRange(sel[0], sel[1]); } catch (e) {} }
+}
 function getGps(manual) {
   if (!navigator.geolocation) { if (manual) toast('Máy không hỗ trợ GPS', { err: true }); return; }
   S.gpsBusy = true; const f = S.form; let best = null; const t0 = Date.now();
-  const done = () => { navigator.geolocation.clearWatch(wid); S.gpsBusy = false; if (S.form === f && curView === '/form') { const y = scrollY; drawForm($('#app'), parseHash().q.id); scrollTo(0, y); } };
+  const done = () => { navigator.geolocation.clearWatch(wid); S.gpsBusy = false; if (S.form === f && curView === '/form') redrawForm(); if (f.lat && (f._for === 'new' || manual)) runAutoFill(f, { force: manual }); };
   const wid = navigator.geolocation.watchPosition((p) => {
     if (!best || p.coords.accuracy < best.accuracy) { best = p.coords; f._picked = false; f.lat = +p.coords.latitude.toFixed(7); f.lng = +p.coords.longitude.toFixed(7); f.gps_acc = Math.round(p.coords.accuracy); delete S.formErr.lat; saveDraft(); }
     if (p.coords.accuracy <= 10 || Date.now() - t0 > 15000) done();
