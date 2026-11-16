@@ -27,9 +27,18 @@ Tài khoản chủ script: dùng **tài khoản Google của đơn vị** (bật
 > **Cập nhật code lần sau:** vào **Triển khai → Quản lý bản triển khai → ✏️ → Phiên bản mới**. Cách này giữ nguyên URL. Không dùng URL `/dev`.
 
 ## 3. Đưa giao diện lên GitHub Pages
-1. Sửa `web/config.js`: dán URL `/exec` vào `SCRIPT_URL`; `KY_GIAM_DOC` là tên in ở khối ký trên Excel. Nếu để trống thì người dùng phải tự dán URL ở màn đăng nhập.
-2. Tạo repo `neo-era/tb-ngoai`, đẩy **nội dung thư mục `web/`** lên nhánh `main`.
-3. Vào **Settings → Pages → Deploy from branch → main / (root)**. Địa chỉ app sẽ là `https://neo-era.github.io/tb-ngoai/`.
+Repo: **github.com/neo-era/camema_tb-ngoai**
+- Nhánh `main`: toàn bộ mã nguồn (src, gas, dist, web, test, docs).
+- Nhánh `gh-pages`: chỉ chứa thư mục `web/`, dùng để chạy app.
+
+1. Vào **Settings → Pages → Build and deployment → Deploy from a branch**, chọn nhánh **gh-pages**, thư mục **/(root)**, rồi bấm **Save**. Địa chỉ app: `https://neo-era.github.io/camema_tb-ngoai/`.
+2. Sửa `web/config.js` để dán URL `/exec` vào `SCRIPT_URL`. Nếu để trống, người dùng phải tự dán URL này ở màn đăng nhập. `KY_GIAM_DOC` là tên in ở khối ký trong file Excel.
+3. Mỗi lần cập nhật giao diện, chạy trong thư mục repo:
+   ```
+   git add -A && git commit -m "..." && git push
+   git subtree push --prefix web origin gh-pages
+   ```
+   Bản sao repo trên máy nằm ở `Kho_Software_Driver\TBNgoai\repo-tb-ngoai`.
 
 ## 4. Tạo tài khoản
 1. Đăng nhập bằng `admin` và mật khẩu tạm, rồi đổi mật khẩu ngay.
