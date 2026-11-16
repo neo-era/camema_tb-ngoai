@@ -472,6 +472,16 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(function (t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('dailyJob').timeBased().everyDays(1).atHour(1).create();
 }
+/** Khôi phục: cấp mật khẩu tạm mới cho tài khoản admin (chạy trong trình soạn thảo khi quên mật khẩu). Mật khẩu in ra nhật ký thực thi. */
+function capLaiMatKhauAdmin() {
+  withLock_(function () {
+    var u = findUser_('admin'), temp = tempPw_();
+    if (!u) { sh_('TaiKhoan').appendRow(['admin', 'Quản trị', 'admin', '', makePw_(temp), 0, false, 0, '', nowIso_(), true]); }
+    else setUserCells_(u, { pw: makePw_(temp), tok_ver: (Number(u.tok_ver) || 0) + 1, sai_lan: 0, khoa_den: '', khoa: false, vai_tro: 'admin', phai_doi_mk: true });
+    log_('he_thong', 'cap_lai_mk', 'admin', '', '', '');
+    console.log('Tài khoản: admin — Mật khẩu tạm: ' + temp + '  (đổi ngay sau khi đăng nhập)');
+  });
+}
 /** Đo số vòng băm để đăng nhập ≈ 1 giây; lưu PW_ITER. */
 function benchmarkHash() {
   var t = Date.now(); hashPw_('thu-mat-khau', 'muoi', 2000); var ms = Date.now() - t;

@@ -324,3 +324,11 @@ test('máy chủ chặn giá trị "constructor" / "__proto__"', () => {
   assert.equal(env.call('save', { rec: rec({ quan: 'toString' }) }, gsTok, rid()).code, 'VALIDATION');
   assert.equal(env.call('save', { rec: rec({ nhom: '__proto__' }) }, gsTok, rid()).code, 'VALIDATION');
 });
+
+test('capLaiMatKhauAdmin cấp mật khẩu tạm mới, phiên cũ hết hạn', () => {
+  env.ctx.capLaiMatKhauAdmin();
+  const pw = env.logs.join('\n').match(/Mật khẩu tạm: (\w+)/g).pop().split(': ')[1];
+  assert.equal(env.call('me', {}, adminTok).code, 'AUTH');
+  const r = env.call('login', { uid: 'admin', pw });
+  assert.equal(r.ok, true); assert.equal(r.data.must_change, true);
+});
