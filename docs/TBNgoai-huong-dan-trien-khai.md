@@ -1,6 +1,6 @@
 # TBNgoài — Hướng dẫn triển khai & vận hành
 
-Phiên bản 1.0.0 · 16/11/2026
+Phiên bản 1.0.7 · 16/11/2026
 
 ## 1. Thành phần
 | Phần | Ở đâu | Ghi chú |
@@ -81,13 +81,32 @@ Sửa cột `gia_tri` trong sheet **CauHinh**. App tự áp dụng ở lần đ�
 - **Tuyến cáp hoặc đèn dây chạy qua nhiều trụ:** chỉ ghi **1 bản ghi**, gồm trụ đầu, trụ cuối và số trụ đi qua.
 - **Góp ý của người dùng:** xem trong sheet **GopY**. Xử lý xong thì đổi cột `status` thành `da_xu_ly` và ghi cách xử lý vào `note`.
 
-## 8. Kiểm thử (dành cho người phát triển)
+## 8. Đang chạy thật (16/11/2026)
+- App: https://neo-era.github.io/camema_tb-ngoai/ — repo `neo-era/camema_tb-ngoai`.
+- Máy chủ: Apps Script "TBNgoai - May chu", gắn với Sheet "TBNgoai - Du lieu" (tài khoản maivulam2020@gmail.com). Bản triển khai Web App là phiên bản 2 (v1.0.4); URL `/exec` giữ cố định và đã điền sẵn trong `web/config.js`.
+- **Quên mật khẩu admin:** mở trình soạn thảo Apps Script, chọn hàm `capLaiMatKhauAdmin`, bấm **Run**. Mật khẩu tạm hiện trong Execution log.
+- **Cập nhật máy chủ:** dán `dist/Code.gs` vào trình soạn thảo, bấm Lưu, rồi vào **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**.
+
+## 9. Ảnh thiết bị & bản đồ
+- **Ảnh:**
+  - Mỗi bản ghi chụp hoặc chọn tối đa 5 ảnh.
+  - App đóng dấu lên ảnh: thời gian, tọa độ (kèm sai số), người cập nhật, trụ/tủ/tuyến.
+  - Ảnh lưu ở thư mục Drive riêng tư **"TBNgoai - Ảnh hiện trường"**, chia thư mục con theo tháng (ví dụ `2026-11`). Tên file dạng `TB_yyyyMMdd_HHmmss_<người>_….jpg`; phần mô tả file ghi thời gian, tọa độ, người cập nhật.
+  - Sheet **Anh** lưu: thời gian chụp, tọa độ, sai số, tên file, thư mục.
+- **Bản đồ:**
+  - Nút ☰ ở góc phải để chọn lớp nền: Đường phố (Esri, mặc định), Vệ tinh (Esri) hoặc OpenStreetMap. Lớp nào lỗi liên tục thì app tự chuyển sang lớp khác.
+  - Mạng văn phòng hiện không kết nối được tới openstreetmap.org, nên mặc định dùng Esri.
+- **Thêm thiết bị trên bản đồ:**
+  - Bấm **+** trên bản đồ → kéo bản đồ cho tâm ngắm trùng vị trí trụ → **Thêm tại đây**. Phải phóng to từ mức 16 trở lên.
+  - Trên máy tính có thể bấm chuột phải ngay vào vị trí.
+
+## 10. Kiểm thử (dành cho người phát triển)
 ```
-npm test                 # build + 66 test lõi & máy chủ (giả lập Apps Script)
-node test/ui.e2e.mjs     # 34 kiểm tra giao diện Chromium, ảnh ở test/shots/
+npm test                 # build + 70 test lõi & máy chủ (giả lập Apps Script)
+node test/ui.e2e.mjs     # 36 kiểm tra giao diện Chromium, ảnh ở test/shots/
 ```
 Lõi nghiệp vụ `src/core.js` được nhúng vào cả `dist/Code.gs` lẫn `web/js/core.js` qua `tools/build.mjs`. Chỉ sửa ở `src/`, sau đó chạy `npm run build`.
 
-## 9. Chưa kiểm trên hệ thống thật (cần anh thử khi triển khai)
+## 11. Chưa kiểm trên hệ thống thật (cần anh thử khi triển khai)
 - Apps Script, Drive và Sheet thật: thời gian đăng nhập sau `benchmarkHash`; giới hạn kích thước gửi ảnh (~800 KB); thời gian giữ lock khi Sheet có hàng nghìn dòng.
 - Điện thoại thật: GPS ngoài trời, chụp ảnh bằng camera, cài PWA trên iPhone (Safari) và Android, chạy offline ngoài hiện trường.
