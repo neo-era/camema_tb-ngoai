@@ -187,7 +187,7 @@ async function flushQueue() {
         if (it.type === 'save') {
           for (const p of it.photos || []) {
             if (p.file_id) continue;
-            const d = await api('uploadPhoto', { photo_client_id: p.pcid, b64: p.b64 }, { timeout: 120000 });
+            const d = await api('uploadPhoto', { photo_client_id: p.pcid, b64: p.b64, meta: p.meta || {} }, { timeout: 120000 });
             p.file_id = d.file_id; await DB.put('queue', it);
           }
           const rec = { ...it.rec, anh: (it.rec.anh || []).map((a) => (a.startsWith('local:') ? (it.photos.find((p) => 'local:' + p.pcid === a) || {}).file_id : a)).filter(Boolean) };
@@ -237,7 +237,7 @@ function render() {
   const app = $('#app');
   if (!scriptUrl() || !S.session) { curView = 'login'; app.className = ''; return viewLogin(app); }
   let { path, q } = parseHash(); if (path === '/' || !routes[path]) path = homePath();
-  if (curView === '/map' && path !== '/map' && S.map) { S.map.remove(); S.map = null; }
+  if (curView === '/map' && path !== '/map' && S.map) { S.map.remove(); S.map = null; document.body.classList.remove('picking'); }
   curView = path;
   const tabbed = ['/list', '/map', '/stats', '/more'].includes(path);
   app.className = tabbed ? 'has-tabs' : '';
@@ -419,12 +419,20 @@ async function openForm(id) {
     S.form = { client_id: uuid(), quan: q, phuong: q === last.quan ? last.phuong || '' : '', tuyen: last.tuyen || '', tu: last.tu || '', so_tru: '', so_luong: 1, van_de: [], anh: [], trang_thai: 'dang_lap', xu_ly: 'chua', an_toan: '', nguon: '', phap_ly: '' };
   }
   S.form._draftKey = draftKey; S.form._photos = S.form._photos || [];
+  if (!id) applyPick(S.form);
   return S.form;
+}
+/** Vị trí chọn trên bản đồ → điền vào form thêm mới (ghi đè GPS). */
+function applyPick(f) {
+  if (!S.pickLoc || !f) return;
+  f.lat = S.pickLoc.lat; f.lng = S.pickLoc.lng; f.gps_acc = S.pickLoc.acc; f._picked = true; delete S.formErr.lat;
+  S.pickLoc = null;
 }
 let draftTimer;
 function saveDraft() { clearTimeout(draftTimer); const form = S.form; draftTimer = setTimeout(() => { if (form && S.form === form) DB.put('kv', { ...form }, form._draftKey).catch(() => {}); }, 400); }
 
 routes['/form'] = async (app, q) => {
+  if (!q.id && S.form && S.form._for === 'new') applyPick(S.form);
   if (!S.form || S.form._for !== (q.id || 'new')) {
     app.innerHTML = `${header('Đang mở…', { backTo: '#/list' })}<main><div class="pad"><div class="skel"></div></div></main>`;
     const f = await openForm(q.id); if (!f) { toast('Không tìm thấy bản ghi', { err: true }); return back('#/list'); }
@@ -443,7 +451,7 @@ function drawForm(app, id) {
   const canXuLy = C.can(S.user, 'xu_ly'); // nhập liệu không cập nhật xử lý (máy chủ cũng chặn)
   app.innerHTML = `${header(isEdit ? 'Sửa thiết bị' : 'Thêm thiết bị', { backTo: isEdit ? '#/detail?id=' + encodeURIComponent(id) : '#/list', right: `<button class="btn pri head-save" data-save>Lưu</button>` })}
   <main style="padding-bottom:16px"><form class="f" id="frm" novalidate>
-  <div class="gps full ${gpsCls}" data-fl="lat">${ic('pin')}<div class="grow">${f.lat ? `<b>${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</b> · ±${Math.round(f.gps_acc || 0)} m${f.gps_acc > 100 ? ' — chưa tin cậy' : f.gps_acc > 30 ? ' — sai số lớn' : ''}` : S.gpsBusy ? 'Đang lấy tọa độ GPS…' : 'Chưa có tọa độ GPS'}
+  <div class="gps full ${gpsCls}" data-fl="lat">${ic('pin')}<div class="grow">${f.lat ? `<b>${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</b> · ±${Math.round(f.gps_acc || 0)} m${f._picked ? ' — chọn trên bản đồ' : ''}${f.gps_acc > 100 ? ' — chưa tin cậy' : f.gps_acc > 30 ? ' — sai số lớn' : ''}` : S.gpsBusy ? 'Đang lấy tọa độ GPS…' : 'Chưa có tọa độ GPS'}
     ${S.formErr.lat ? `<div class="err">${esc(S.formErr.lat)}</div>` : ''}</div><button type="button" class="pill" id="b-gps">${ic('sync')}${f.lat ? 'Lấy lại' : 'Lấy GPS'}</button></div>
   ${FL('quan', 'Quận (địa bàn cũ)', SEG('quan', quans, { cols: 3 }), { req: true, cls: 'full' })}
   ${phuongs ? FL('phuong', 'Phường', SEG('phuong', phuongs), { req: true, cls: 'full' }) : ''}
@@ -461,8 +469,12 @@ function drawForm(app, id) {
     ${FL('an_toan', 'Mức an toàn', SEG('an_toan', DM.AN_TOAN, { cols: 3, danger: { nguy_hiem: 1 }, warn: { can_kp: 1 } }), { req: true })}
     ${f.an_toan && f.an_toan !== 'dat' || (f.van_de || []).length ? FL('van_de', 'Vấn đề (chọn nhiều)', MULTI('van_de', DM.VAN_DE), { req: f.an_toan !== 'dat' }) : ''}
     ${f.an_toan && f.an_toan !== 'dat' ? FL('ghi_chu_at', 'Mô tả hiện trạng', TXT('ghi_chu_at')) : ''}
-    ${FL('anh', `Ảnh hiện trường (${nPhoto}/3)`, `<div class="ph" id="ph">${(f.anh || []).map((a, i) => `<div class="slot" data-ph="${i}"><div class="ph-load" data-f="${esc(a)}"></div><button type="button" class="x" data-rmph="${i}" aria-label="Bỏ ảnh">×</button></div>`).join('')}
-      ${nPhoto < 3 ? `<label class="slot" aria-label="Chụp / chọn ảnh">${ic('cam')}<input type="file" accept="image/*" capture="environment" id="i-photo" class="sr"></label>` : ''}</div>`,
+  </section>
+
+  <section class="grp full"><h3>${ic('cam')} Ảnh thiết bị</h3>
+    ${FL('anh', `Ảnh (${nPhoto}/5) — tự đóng dấu thời gian, tọa độ, người cập nhật`, `<div class="ph" id="ph">${(f.anh || []).map((a, i) => `<div class="slot" data-ph="${i}"><div class="ph-load" data-f="${esc(a)}"></div><button type="button" class="x" data-rmph="${i}" aria-label="Bỏ ảnh">×</button></div>`).join('')}
+      ${nPhoto < 5 ? `<label class="slot" aria-label="Chụp ảnh">${ic('cam')}<span class="mut" style="font-size:13px">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" id="i-photo" class="sr"></label>
+      <label class="slot" aria-label="Chọn ảnh có sẵn">${ic('plus')}<span class="mut" style="font-size:13px">Chọn ảnh</span><input type="file" accept="image/*" multiple id="i-photo2" class="sr"></label>` : ''}</div>`,
       { req: (f.an_toan && f.an_toan !== 'dat') || ['khong_vb', 'sai_vb'].includes(f.phap_ly) })}
   </section>
 
@@ -522,11 +534,20 @@ function wireForm(app, id) {
   });
   $('#b-gps').onclick = () => getGps(true);
   $('#b-vochu').onclick = () => { f.don_vi = DM.VO_CHU; delete S.formErr.don_vi; saveDraft(); redraw(); };
-  const ph = $('#i-photo'); if (ph) ph.onchange = async () => {
-    const file = ph.files[0]; if (!file) return;
-    try { const b64 = await compressImage(file); const pcid = uuid(); f._photos = [...(f._photos || []), { pcid, b64 }]; f.anh = [...(f.anh || []), 'local:' + pcid]; S.photoCache.set('local:' + pcid, 'data:image/jpeg;base64,' + b64); delete S.formErr.anh; saveDraft(); redraw(); }
-    catch (e) { toast(e.message, { err: true }); }
+  const onPick = async (inp) => {
+    const files = [...inp.files].slice(0, 5 - (f.anh || []).length); if (!files.length) return;
+    for (const file of files) {
+      try {
+        const meta = { chup_luc: new Date(file.lastModified && inp.id === 'i-photo2' ? file.lastModified : Date.now()).toISOString(), lat: f.lat ?? '', lng: f.lng ?? '', gps_acc: f.gps_acc ?? '' };
+        const stamp = C.photoStamp({ luc: meta.chup_luc, lat: meta.lat, lng: meta.lng, acc: meta.gps_acc, ho_ten: S.user.ho_ten, uid: S.user.uid, so_tru: f.so_tru, tu: f.tu, tuyen: f.tuyen });
+        const b64 = await compressImage(file, stamp); const pcid = uuid();
+        f._photos = [...(f._photos || []), { pcid, b64, meta }]; f.anh = [...(f.anh || []), 'local:' + pcid];
+        S.photoCache.set('local:' + pcid, 'data:image/jpeg;base64,' + b64); delete S.formErr.anh;
+      } catch (e) { toast(e.message, { err: true }); }
+    }
+    saveDraft(); redraw();
   };
+  for (const id of ['#i-photo', '#i-photo2']) { const el = $(id); if (el) el.onchange = () => onPick(el); }
   app.querySelectorAll('[data-save]').forEach((b) => (b.onclick = () => submitForm(id)));
   const cancel = app.querySelector('[data-cancel]'); if (cancel) cancel.onclick = async () => { if (await confirmBox('Huỷ nhập?', 'Nội dung đang nhập sẽ bị bỏ.', 'Bỏ nội dung', true)) { clearTimeout(draftTimer); await DB.del('kv', f._draftKey); S.form = null; back('#/list'); } };
 }
@@ -563,14 +584,23 @@ async function conflictDialog(it) {
   const ok = await confirmBox('Bản ghi vừa được người khác sửa', `Người sửa: <b>${esc(cur && cur.sua_boi)}</b> lúc ${esc(cur && fmtD(cur.sua_luc))}. Bỏ thay đổi của anh/chị và mở bản mới nhất để sửa lại?`, 'Mở bản mới nhất');
   if (ok) { await DB.del('queue', it.qid); S.queue = S.queue.filter((x) => x.qid !== it.qid); if (cur) { S.recs.set(cur.id, cur); await DB.put('recs', cur); } go('#/form?id=' + encodeURIComponent(cur.id)); }
 }
-function compressImage(file) {
+/** Nén ảnh (cạnh dài 1280 px, ≤ 560 KB) và đóng dấu dải thông tin ở đáy ảnh. */
+function compressImage(file, stamp) {
   return new Promise((res, rej) => {
     if (!/^image\//.test(file.type)) return rej(new Error('Chỉ chọn tệp ảnh'));
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(url);
       let w = img.naturalWidth, h = img.naturalHeight; const k = Math.min(1, 1280 / Math.max(w, h)); w = Math.round(w * k); h = Math.round(h * k);
-      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; cv.getContext('2d').drawImage(img, 0, 0, w, h);
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'); g.drawImage(img, 0, 0, w, h);
+      if (stamp && stamp.length) {
+        const fs = Math.max(14, Math.round(Math.min(w, h) / 30)), lh = Math.round(fs * 1.35), pad = Math.round(fs * 0.6), bh = lh * stamp.length + pad * 2;
+        g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(0, h - bh, w, bh);
+        g.font = `600 ${fs}px "Be Vietnam Pro", "Segoe UI", Roboto, Arial, sans-serif`; g.textBaseline = 'top'; g.fillStyle = '#fff';
+        g.shadowColor = 'rgba(0,0,0,.8)'; g.shadowBlur = 2;
+        stamp.forEach((t, i) => g.fillText(t, pad, h - bh + pad + i * lh, w - pad * 2));
+        g.shadowBlur = 0;
+      }
       for (let q = 0.75; q >= 0.35; q -= 0.1) { const b64 = cv.toDataURL('image/jpeg', q).split(',')[1]; if (b64.length * 0.75 <= 560 * 1024) return res(b64); }
       rej(new Error('Ảnh quá lớn, không nén được'));
     };
@@ -583,7 +613,7 @@ function getGps(manual) {
   S.gpsBusy = true; const f = S.form; let best = null; const t0 = Date.now();
   const done = () => { navigator.geolocation.clearWatch(wid); S.gpsBusy = false; if (S.form === f && curView === '/form') { const y = scrollY; drawForm($('#app'), parseHash().q.id); scrollTo(0, y); } };
   const wid = navigator.geolocation.watchPosition((p) => {
-    if (!best || p.coords.accuracy < best.accuracy) { best = p.coords; f.lat = +p.coords.latitude.toFixed(7); f.lng = +p.coords.longitude.toFixed(7); f.gps_acc = Math.round(p.coords.accuracy); delete S.formErr.lat; saveDraft(); }
+    if (!best || p.coords.accuracy < best.accuracy) { best = p.coords; f._picked = false; f.lat = +p.coords.latitude.toFixed(7); f.lng = +p.coords.longitude.toFixed(7); f.gps_acc = Math.round(p.coords.accuracy); delete S.formErr.lat; saveDraft(); }
     if (p.coords.accuracy <= 10 || Date.now() - t0 > 15000) done();
   }, (e) => { done(); toast(e.code === 1 ? 'Chưa cho phép vị trí — vẫn lưu được, tọa độ đánh dấu chưa tin cậy' : 'Không lấy được GPS', { err: true }); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
   setTimeout(() => { if (S.gpsBusy) done(); }, 16000);
@@ -771,6 +801,10 @@ routes['/map'] = (app) => {
   app.innerHTML = `<div class="mapv"><div id="map" role="application" aria-label="Bản đồ thiết bị"></div></div>
   <div class="map-top"><label class="search">${ic('search')}<span class="sr">Tìm</span><input id="mq" type="search" placeholder="Tìm tuyến, trụ, đơn vị…" value="${esc(S.listFilter.q)}"></label></div>
   <button class="ib locate" id="b-loc" aria-label="Về vị trí của tôi">${ic('nav')}</button>
+  ${canAddRec() ? `<button class="fab map-add" id="b-madd" aria-label="Thêm thiết bị trên bản đồ">${ic('plus')}</button>
+  <div class="crosshair" id="xh" aria-hidden="true"></div>
+  <div class="pickbar" id="pickbar" role="dialog" aria-label="Chọn vị trí thiết bị"><div class="t" id="pick-t">Kéo bản đồ cho tâm ngắm trùng vị trí trụ</div>
+    <div class="row"><button class="btn" id="pick-no">Huỷ</button><button class="btn" id="pick-gps">${ic('nav')}Về GPS</button><button class="btn pri" id="pick-ok">${ic('check')}Thêm tại đây</button></div></div>` : ''}
   <section class="drawer ${drawerMin ? 'min' : ''}" id="drw" aria-label="Danh sách trong vùng"><button class="grab" id="grab" aria-label="Thu gọn / mở rộng danh sách"></button>
     <div class="legend"><span>${mkHtml('do')} Đỏ</span><span>${mkHtml('vang')} Vàng</span><span>${mkHtml('ok')} Ổn</span><span id="mcount"></span></div>
     <div class="list" id="mlist" style="padding-bottom:12px"></div></section>`;
@@ -786,7 +820,37 @@ routes['/map'] = (app) => {
   $('#grab').onclick = () => { drawerMin = !drawerMin; $('#drw').classList.toggle('min', drawerMin); };
   $('#b-loc').onclick = () => navigator.geolocation && navigator.geolocation.getCurrentPosition((p) => S.map.setView([p.coords.latitude, p.coords.longitude], 17), () => toast('Không lấy được vị trí', { err: true }), { enableHighAccuracy: true, timeout: 10000 });
   $('#mlist').onclick = (e) => { const b = e.target.closest('[data-open]'); if (b) go('#/detail?id=' + encodeURIComponent(b.dataset.open)); };
+  if (canAddRec()) {
+    const setPick = (on) => { document.body.classList.toggle('picking', on); if (on) updatePickHint(); };
+    $('#b-madd').onclick = () => { setPick(true); if (S.map.getZoom() < 17) S.map.setZoom(17); };
+    $('#pick-no').onclick = () => setPick(false);
+    $('#pick-gps').onclick = () => $('#b-loc').click();
+    $('#pick-ok').onclick = () => { const p = crosshairLatLng(); if (p) pickAt(p); };
+    S.map.on('zoomend', () => document.body.classList.contains('picking') && updatePickHint());
+    S.map.on('contextmenu', (e) => pickAt(e.latlng)); // chuột phải (máy tính) / nhấn giữ (điện thoại)
+  }
 };
+function canAddRec() { return S.user && ['admin', 'giamsat', 'nhaplieu'].includes(S.user.vai_tro); }
+/** Sai số ước tính khi chọn tay: ~10 điểm ảnh ở mức phóng hiện tại. */
+function pickAcc(lat) { return Math.max(2, Math.round(156543.03 * Math.cos((lat * Math.PI) / 180) / 2 ** S.map.getZoom() * 10)); }
+function updatePickHint() {
+  const z = S.map.getZoom(), el = $('#pick-t'), ok = $('#pick-ok'); if (!el) return;
+  const enough = z >= 16;
+  el.textContent = enough ? `Kéo bản đồ cho tâm ngắm trùng vị trí trụ (sai số ≈ ±${pickAcc(S.map.getCenter().lat)} m)` : 'Phóng to thêm để chọn chính xác vị trí trụ';
+  ok.disabled = !enough;
+}
+function crosshairLatLng() {
+  const xh = $('#xh'), m = $('#map'); if (!xh || !S.map) return null;
+  const a = xh.getBoundingClientRect(), b = m.getBoundingClientRect();
+  return S.map.containerPointToLatLng([a.left + a.width / 2 - b.left, a.top + a.height / 2 - b.top]);
+}
+function pickAt(ll) {
+  if (S.map.getZoom() < 16) { S.map.setView(ll, 17); document.body.classList.add('picking'); updatePickHint(); toast('Đã phóng to — chỉnh tâm ngắm rồi bấm "Thêm tại đây"'); return; }
+  if (!(ll.lat >= 10.3 && ll.lat <= 11.2 && ll.lng >= 106.3 && ll.lng <= 107.1)) return toast('Vị trí nằm ngoài TP.HCM', { err: true });
+  S.pickLoc = { lat: +ll.lat.toFixed(7), lng: +ll.lng.toFixed(7), acc: pickAcc(ll.lat) };
+  document.body.classList.remove('picking');
+  go('#/form');
+}
 function mapData() { return C.filterRecs(allRecs(), { q: S.listFilter.q, quan: S.listFilter.quan }).filter((r) => r.lat && r.lng); }
 function levelOf(r) { const a = C.topAlert(r, new Date(), S.cfg); return a ? a.level : 'ok'; }
 function drawMarkers(fit) {

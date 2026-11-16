@@ -326,6 +326,18 @@ var Core = (function () {
     return false;
   }
 
+  /** Dòng chữ đóng dấu lên ảnh: thời gian (giờ VN), tọa độ, người cập nhật, vị trí trụ. */
+  function photoStamp(o) {
+    var d = new Date(Date.parse(o.luc) + 7 * 3600e3).toISOString();
+    var t = d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) + ' ' + d.slice(11, 19);
+    var lat = Number(o.lat), lng = Number(o.lng), has = o.lat !== '' && o.lat != null && isFinite(lat) && isFinite(lng);
+    var lines = ['Thời gian: ' + t,
+      'Tọa độ: ' + (has ? lat.toFixed(6) + ', ' + lng.toFixed(6) + (o.acc ? ' (±' + Math.round(o.acc) + ' m)' : '') : 'chưa có'),
+      'Người cập nhật: ' + (str(o.ho_ten) && str(o.ho_ten) !== str(o.uid) ? str(o.ho_ten) + ' (' + str(o.uid) + ')' : str(o.uid))];
+    var vt = [str(o.so_tru) ? 'Trụ ' + upperCode(o.so_tru) : '', str(o.tu) ? 'Tủ ' + upperCode(o.tu) : '', str(o.tuyen)].filter(Boolean).join(' · ');
+    if (vt) lines.push('Vị trí: ' + vt);
+    return lines;
+  }
   /** Kiểm tối thiểu 1 dòng đọc từ Sheet (có thể bị sửa tay). */
   function rowSane(r) {
     var sl = Number(r.so_luong);
@@ -333,7 +345,7 @@ var Core = (function () {
       has(DM.PHAP_LY, r.phap_ly) && has(DM.NGUON, r.nguon) && has(DM.AN_TOAN, r.an_toan) && has(DM.TRANG_THAI, r.trang_thai || 'dang_lap');
   }
   return {
-    has: has, rowSane: rowSane,
+    has: has, rowSane: rowSane, photoStamp: photoStamp,
     DM: DM, DEFAULT_CFG: DEFAULT_CFG, ALERTS: ALERTS, VIOL: VIOL, SAFETY: SAFETY,
     fold: fold, isDate: isDate, todayVN: todayVN, daysBetween: daysBetween, toBool: toBool,
     sanitizeCell: sanitizeCell, safeEqual: safeEqual, upperCode: upperCode,

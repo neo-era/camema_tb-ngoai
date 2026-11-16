@@ -1,5 +1,5 @@
 // Service worker: cache "app shell" (cache-first), KHÔNG cache API Apps Script; bản đồ nền cache theo lần xem.
-const SHELL = 'tbngoai-v1.0.2';
+const SHELL = 'tbngoai-v1.0.4';
 const TILES = 'tbngoai-tiles';
 const FILES = ['./', 'index.html', 'app.css', 'config.js', 'manifest.webmanifest', 'js/app.js', 'js/core.js', 'js/version.js', 'js/theme.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/exceljs.min.js', 'icons/icon-192.png', 'icons/icon-512.png'];
