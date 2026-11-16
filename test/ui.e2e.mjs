@@ -43,8 +43,9 @@ for (let i = 0; i < 40; i++) env.call('save', { rec: { client_id: crypto.randomU
 const browser = await chromium.launch();
 let apiCalls = 0, offline = false, geoCalls = 0;
 async function newCtx(opts = {}) {
+  const hint = opts.hint; delete opts.hint;
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, permissions: ['geolocation'], geolocation: { latitude: 10.7769, longitude: 106.7009, accuracy: 8 }, locale: 'vi-VN', timezoneId: 'Asia/Ho_Chi_Minh', ...opts });
-  await ctx.addInitScript((u) => localStorage.setItem('tbn_script_url', u), URL_API);
+  await ctx.addInitScript(([u, hint]) => { localStorage.setItem('tbn_script_url', u); if (!hint && !sessionStorage.getItem('x')) localStorage.setItem('tbn_help_seen', '1'); }, [URL_API, !!hint]);
   await ctx.route('https://script.google.com/**', (route) => {
     if (offline) return route.abort('internetdisconnected');
     apiCalls++;
@@ -295,6 +296,29 @@ try {
   await p9.setViewportSize({ width: 360, height: 640 }); await noOverflow(p9, 'tudien 360');
   await p9.screenshot({ path: ROOT + 'test/shots/tudien-bando.png' });
   await c9.close();
+
+  // ===== 4d. Hướng dẫn sử dụng =====
+  const ch = await newCtx({ hint: true, viewport: { width: 360, height: 640 } }); const ph = await ch.newPage(); watch(ph);
+  await ph.goto(BASE + '#/help'); await ph.waitForSelector('#hl details');
+  const nSec = await ph.locator('#hl details').count(); assert.ok(nSec >= 12, 'số mục ' + nSec);
+  await ph.fill('#hq', 'gps'); await ph.waitForTimeout(350);
+  const hits = await ph.locator('#hl details[open]').count(); assert.ok(hits >= 1 && hits < nSec, 'tìm gps: ' + hits);
+  await noOverflow(ph, 'help 360');
+  await ph.screenshot({ path: ROOT + 'test/shots/huongdan.png', fullPage: false });
+  await ph.click('[data-back]'); await ph.waitForSelector('#lf');
+  ok(`Hướng dẫn mở được ngay từ màn đăng nhập (${nSec} mục), tìm "gps" lọc còn ${hits} mục, không tràn 360 px`);
+  await ph.fill('#l-uid', 'to1'); await ph.fill('#l-pw', 'MatKhau@123'); await ph.click('#l-btn'); await ph.waitForSelector('.tabs');
+  await ph.waitForSelector('.toast >> text=Xem hướng dẫn', { timeout: 6000 });
+  ok('Lần đầu đăng nhập: mời xem hướng dẫn (1 lần)');
+  await ph.evaluate(() => (location.hash = '#/more')); await ph.click('#m-help'); await ph.waitForSelector('#h-batdau');
+  await ph.evaluate(() => (location.hash = '#/form')); await ph.waitForSelector('#frm');
+  await noOverflow(ph, 'form header 360');
+  await ph.click('a[href="#/help?s=them"]'); await ph.waitForSelector('#h-them[open]');
+  assert.equal(await ph.locator('#hl details[open]').count(), 1);
+  ok('Khác → Hướng dẫn; nút ? trên form mở đúng mục "Thêm thiết bị mới"');
+  await ph.reload(); await ph.waitForSelector('.tabs, #hl'); await ph.waitForTimeout(2000);
+  assert.equal(await ph.locator('.toast >> text=Xem hướng dẫn').count(), 0, 'không mời lại');
+  await ch.close();
 
   // ===== 5. Mật khẩu tạm khi còn hàng chờ: không làm hỏng hàng chờ, chỉ 1 hộp đổi mật khẩu =====
   const c5 = await newCtx(); const p5 = await c5.newPage(); watch(p5);

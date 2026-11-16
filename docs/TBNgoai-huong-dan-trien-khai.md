@@ -1,6 +1,6 @@
 # TBNgoài — Hướng dẫn triển khai & vận hành
 
-Phiên bản 1.0.8 · 16/11/2026
+Phiên bản 1.0.9 · 16/11/2026
 
 ## 1. Thành phần
 | Phần | Ở đâu | Ghi chú |
@@ -110,10 +110,16 @@ Sửa cột `gia_tri` trong sheet **CauHinh**. App tự áp dụng ở lần đ�
 - Sửa bản ghi: không tự điền khi mở; bấm "Lấy lại" GPS thì chỉ điền ô đang trống.
 - Máy chủ không đổi (không cần triển khai lại Apps Script).
 
+## 9c. Hướng dẫn sử dụng trong app (từ 1.0.9)
+- Mở từ **Khác → Hướng dẫn sử dụng**, từ nút **Hướng dẫn sử dụng** ở màn đăng nhập (chưa cần tài khoản), hoặc nút **?** trên màn Thêm/Sửa thiết bị và Thống kê (mở đúng mục).
+- 14 mục, có ô tìm kiếm; mục dành riêng cho vai trò được gắn nhãn. Ngưỡng hạn xử lý hiển thị theo sheet **CauHinh** đang áp dụng.
+- Lần đầu đăng nhập trên một máy, app mời xem hướng dẫn một lần.
+- Chạy được khi mất mạng. Nội dung nằm ở `web/js/help.js` — sửa nội dung thì sửa file này rồi đẩy lên GitHub Pages.
+
 ## 10. Kiểm thử (dành cho người phát triển)
 ```
-npm test                 # build + 79 test lõi & máy chủ (giả lập Apps Script)
-node test/ui.e2e.mjs     # 40 kiểm tra giao diện Chromium, ảnh ở test/shots/
+npm test                 # build + 78 test lõi & máy chủ (giả lập Apps Script)
+node test/ui.e2e.mjs     # 43 kiểm tra giao diện Chromium, ảnh ở test/shots/
 ```
 Lõi nghiệp vụ `src/core.js` được nhúng vào cả `dist/Code.gs` lẫn `web/js/core.js` qua `tools/build.mjs`. Chỉ sửa ở `src/`, sau đó chạy `npm run build`.
 
