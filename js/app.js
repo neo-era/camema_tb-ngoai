@@ -27,7 +27,7 @@ const IP = {
   check: 'M20 6 9 17l-5-5', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z', trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
   nav: 'M3 11l19-9-9 19-2-8-8-2z', x: 'M18 6 6 18M6 6l12 12', file: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',
   install: 'M12 3v12M7 10l5 5 5-5M5 21h14', settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z',
-  filter: 'M22 3H2l8 9.5V19l4 2v-8.5z', recheck: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'
+  filter: 'M22 3H2l8 9.5V19l4 2v-8.5z', help: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01', recheck: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11'
 };
 const ic = (n, label) => `<svg class="i" viewBox="0 0 24 24" ${label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"'}><path d="${IP[n] || IP.dots}"/></svg>`;
 
@@ -235,7 +235,11 @@ function homePath() { return S.user && ['giamsat', 'xem', 'admin'].includes(S.us
 let curView = null;
 function render() {
   const app = $('#app');
-  if (!scriptUrl() || !S.session) { curView = 'login'; app.className = ''; return viewLogin(app); }
+  if (!scriptUrl() || !S.session) {
+    const h = parseHash(); app.className = '';
+    if (h.path === '/help') { curView = '/help'; return routes['/help'](app, h.q); }
+    curView = 'login'; return viewLogin(app);
+  }
   let { path, q } = parseHash(); if (path === '/' || !routes[path]) path = homePath();
   if (curView === '/map' && path !== '/map' && S.map) { S.map.remove(); S.map = null; document.body.classList.remove('picking'); }
   curView = path;
@@ -244,6 +248,19 @@ function render() {
   routes[path](app, q);
   if (tabbed) app.insertAdjacentHTML('beforeend', tabsHtml(path));
   renderHeaderState(); window.scrollTo(0, q._keep ? window.scrollY : 0);
+  maybeHelpHint(path);
+}
+let helpHinted = false;
+/** Lần đầu dùng trên máy này: mời xem hướng dẫn (1 lần, dạng thông báo nhỏ). */
+function maybeHelpHint(path) {
+  if (helpHinted || path === '/help' || !S.session) return;
+  let seen = '1'; try { seen = localStorage.getItem('tbn_help_seen'); } catch (e) {}
+  if (seen) return;
+  helpHinted = true; try { localStorage.setItem('tbn_help_seen', '1'); } catch (e) {}
+  setTimeout(() => {
+    if (pwDialogOpen || document.querySelector('.modal') || !S.session) { helpHinted = false; try { localStorage.removeItem('tbn_help_seen'); } catch (e) {} return; }
+    toast('Lần đầu dùng app? Xem hướng dẫn sử dụng', { action: 'Xem', onAction: () => go('#/help'), ms: 8000 });
+  }, 1200);
 }
 function rerenderSoft() { if (['/list', '/stats', '/detail', '/queue'].includes(curView)) { const y = window.scrollY; render(); window.scrollTo(0, y); } else if (curView === '/map') drawMarkers(); }
 const tabsHtml = (cur) => `<nav class="tabs" aria-label="Chuyển màn">${[['/list', 'list', 'Danh sách'], ['/map', 'map', 'Bản đồ'], ['/stats', 'chart', 'Thống kê'], ['/more', 'menu', 'Khác']]
@@ -267,6 +284,7 @@ function viewLogin(app) {
     <div class="fl"><label for="l-uid">Tên đăng nhập</label><input class="in" id="l-uid" autocomplete="username" autocapitalize="none" required></div>
     <div class="fl"><label for="l-pw">Mật khẩu</label><input class="in" id="l-pw" type="password" autocomplete="current-password" required></div>
     <button class="btn pri block" id="l-btn">Đăng nhập</button><div class="err" id="l-e" role="alert"></div>
+    <a class="btn flat block" href="#/help">${ic('help')}Hướng dẫn sử dụng</a>
     <div class="mut" style="text-align:center">Phiên bản ${esc(window.APP_VERSION || '')}</div></form></div>`;
   $('#lf').onsubmit = async (e) => {
     e.preventDefault(); const btn = $('#l-btn'); btn.disabled = true; btn.textContent = 'Đang đăng nhập…'; $('#l-e').textContent = '';
@@ -450,7 +468,7 @@ function drawForm(app, id) {
   const nPhoto = (f.anh || []).length;
   const gpsCls = f.gps_acc > 30 || !f.lat ? 'warn' : '';
   const canXuLy = C.can(S.user, 'xu_ly'); // nhập liệu không cập nhật xử lý (máy chủ cũng chặn)
-  app.innerHTML = `${header(isEdit ? 'Sửa thiết bị' : 'Thêm thiết bị', { backTo: isEdit ? '#/detail?id=' + encodeURIComponent(id) : '#/list', right: `<button class="btn pri head-save" data-save>Lưu</button>` })}
+  app.innerHTML = `${header(isEdit ? 'Sửa thiết bị' : 'Thêm thiết bị', { backTo: isEdit ? '#/detail?id=' + encodeURIComponent(id) : '#/list', right: `<a class="ib" href="#/help?s=them" aria-label="Hướng dẫn nhập">${ic('help')}</a><button class="btn pri head-save" data-save>Lưu</button>` })}
   <main style="padding-bottom:16px"><form class="f" id="frm" novalidate>
   <div class="gps full ${gpsCls}" data-fl="lat">${ic('pin')}<div class="grow">${f.lat ? `<b>${Number(f.lat).toFixed(6)}, ${Number(f.lng).toFixed(6)}</b> · ±${Math.round(f.gps_acc || 0)} m${f._picked ? ' — chọn trên bản đồ' : ''}${f.gps_acc > 100 ? ' — chưa tin cậy' : f.gps_acc > 30 ? ' — sai số lớn' : ''}` : S.gpsBusy ? 'Đang lấy tọa độ GPS…' : 'Chưa có tọa độ GPS'}
     ${S.formErr.lat ? `<div class="err">${esc(S.formErr.lat)}</div>` : ''}</div><button type="button" class="pill" id="b-gps">${ic('sync')}${f.lat ? 'Lấy lại' : 'Lấy GPS'}</button></div>
@@ -719,7 +737,7 @@ routes['/stats'] = (app) => {
     `<div><div class="bar-l"><span>${esc(t)}</span><b>${fmtN(obj[k].vi_tri)}</b></div><div class="bar"><i style="width:${(obj[k].vi_tri / Math.max(1, st.vi_tri)) * 100}%"></i></div></div>`).join('') || '<div class="mut">Chưa có dữ liệu</div>'}</div>`;
   const opt = (map, cur) => Object.entries(map).map(([k, v]) => `<option value="${k}" ${cur === k ? 'selected' : ''}>${esc(typeof v === 'string' ? v : v.ten)}</option>`).join('');
   const donvis = [...new Set(recs.map((r) => r.don_vi).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
-  app.innerHTML = `${header('Tổng hợp thống kê', { right: `<button class="ib" id="b-xls" aria-label="Xuất Excel">${ic('download')}<span>Excel</span></button>` })}
+  app.innerHTML = `${header('Tổng hợp thống kê', { right: `<a class="ib" href="#/help?s=thongke" aria-label="Hướng dẫn thống kê">${ic('help')}</a><button class="ib" id="b-xls" aria-label="Xuất Excel">${ic('download')}<span>Excel</span></button>` })}
   <main><div class="wrap pad">
   <div class="g2" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
     <div class="fl"><label for="s-quan">Quận</label><select class="in" id="s-quan" data-sf="quan"><option value="">Toàn KVTT</option>${opt(Object.fromEntries(quans.map((q) => [q, quanTen(q)])), sf.quan)}</select></div>
@@ -992,6 +1010,7 @@ routes['/more'] = (app) => {
     <div class="card it" style="cursor:default"><div class="ic">${ic('user')}</div><div class="grow"><div class="t">${esc(u.ho_ten || u.uid)}</div><div class="m">${esc(u.uid)} · ${esc(DM.VAI_TRO[u.vai_tro])}${u.quan.length ? ' · ' + u.quan.map(quanTen).join(', ') : ''}</div></div></div>
     ${item('m-queue', 'sync', 'Hàng chờ gửi', `${pendingCount()} mục`)}
     ${item('m-sync', 'cloud', 'Đồng bộ lại toàn bộ', 'Tải lại dữ liệu từ máy chủ')}
+    ${item('m-help', 'help', 'Hướng dẫn sử dụng', 'Cách nhập, chụp ảnh, xử lý, xuất Excel, xử lý sự cố')}
     ${item('m-fb', 'msg', 'Góp ý & đánh giá', 'Báo lỗi, đề xuất, chấm điểm ứng dụng')}
     ${isAdmin ? item('m-users', 'users', 'Quản lý tài khoản', 'Thêm, phân quyền, khoá, cấp lại mật khẩu') : ''}
     ${item('m-pw', 'key', 'Đổi mật khẩu')}
@@ -1002,6 +1021,7 @@ routes['/more'] = (app) => {
   $('#m-queue').onclick = () => go('#/queue');
   $('#m-sync').onclick = async () => { S.since = ''; await sync(); flushQueue(); };
   $('#m-fb').onclick = feedbackDialog;
+  $('#m-help').onclick = () => go('#/help');
   if (isAdmin) $('#m-users').onclick = () => go('#/users');
   $('#m-pw').onclick = () => changePwDialog(false);
   $('#m-install').onclick = installApp;
@@ -1010,6 +1030,24 @@ routes['/more'] = (app) => {
     await wipeLocal(); S.session = null; S.user = null; go('#/', true); render();
   };
   app.querySelectorAll('[data-theme-set]').forEach((b) => (b.onclick = () => { localStorage.setItem('tbn_theme', b.dataset.themeSet); const p = b.dataset.themeSet; document.documentElement.dataset.theme = p === 'dark' || (p === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'; render(); }));
+};
+
+// ---------------- Hướng dẫn sử dụng ----------------
+routes['/help'] = (app, q) => {
+  const secs = (window.TBN_HELP ? window.TBN_HELP(S.cfg) : []), role = S.user ? DM.VAI_TRO[S.user.vai_tro] : '';
+  const fold = (t) => C.fold(String(t).replace(/<[^>]+>/g, ' '));
+  const draw = (term) => {
+    const t = fold(term || ''), list = secs.filter((x) => !t || fold(x.title + ' ' + x.html).includes(t));
+    $('#hl').innerHTML = list.map((x) => `<details class="card help" id="h-${x.id}" ${t || q.s === x.id ? 'open' : ''}><summary>${ic(x.icon)}<span class="grow">${esc(x.title)}${x.roles ? `<br><span class="tag ${role && x.roles.includes(role) ? 'me' : ''}">${esc(x.roles)}</span>` : ''}</span></summary><div class="hb">${x.html}</div></details>`).join('') ||
+      `<div class="empty">${ic('search')}<div>Không tìm thấy nội dung khớp. Thử từ khác, hoặc gửi câu hỏi qua Góp ý.</div></div>`;
+  };
+  app.innerHTML = `${header('Hướng dẫn sử dụng', { backTo: S.session ? '#/more' : '#/' })}<main><div class="wrap pad">
+    <label class="search">${ic('search')}<span class="sr">Tìm trong hướng dẫn</span><input id="hq" type="search" placeholder="Tìm: ảnh, GPS, Excel, mất mạng…"></label>
+    <div class="menu" id="hl" style="margin-top:12px"></div>
+    <div class="mut" style="text-align:center;margin-top:16px">Phiên bản ${esc(window.APP_VERSION || '')}${S.session ? ' · Còn thắc mắc? <a href="#/more">Khác → Góp ý</a>' : ''}</div></div></main>`;
+  draw('');
+  let tm; $('#hq').oninput = (e) => { clearTimeout(tm); tm = setTimeout(() => draw(e.target.value), 200); };
+  if (q.s) { const el = $('#h-' + q.s); if (el) setTimeout(() => el.scrollIntoView({ block: 'start' }), 0); }
 };
 routes['/queue'] = (app) => {
   const lab = { save: 'Lưu thiết bị', del: 'Xoá', recheck: 'Kiểm tra lại', feedback: 'Góp ý' };

@@ -236,3 +236,22 @@ body.picking .toasts { bottom: calc(var(--tab-h) + var(--sab) + 170px); }
 .autonote { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 12px; font-size: 13.5px; background: color-mix(in srgb, var(--acc) 10%, transparent); color: var(--fg); }
 .autonote .grow { flex: 1; min-width: 0; }
 .autonote .pill { flex: none; }
+
+/* Hướng dẫn sử dụng */
+details.help { padding: 0; overflow: hidden; }
+details.help > summary { list-style: none; display: flex; gap: 10px; align-items: center; min-height: 52px; padding: 10px 14px; cursor: pointer; font-weight: 700; }
+details.help > summary::-webkit-details-marker { display: none; }
+details.help > summary::after { content: '›'; font-size: 22px; line-height: 1; color: var(--mut, #64748b); transition: transform .2s; }
+details.help[open] > summary::after { transform: rotate(90deg); }
+details.help .tag { display: inline-block; margin-top: 3px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 8%, transparent); white-space: nowrap; }
+details.help .tag.me { background: color-mix(in srgb, var(--acc) 18%, transparent); }
+.hb { padding: 0 16px 14px; font-size: 15px; line-height: 1.55; }
+.hb ol, .hb ul { padding-left: 20px; margin: 6px 0; } .hb li { margin: 4px 0; }
+.hb table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 14px; display: block; overflow-x: auto; }
+.hb th, .hb td { border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent); padding: 6px 8px; text-align: left; vertical-align: top; }
+.hb th { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.hb dt { font-weight: 700; margin-top: 10px; } .hb dd { margin: 2px 0 0 0; }
+.hb .tip { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--acc) 10%, transparent); }
+.hb .tip::before { content: '💡 '; }
+@media (prefers-reduced-motion: reduce) { details.help > summary::after { transition: none; } }
+.btn.flat { border-color: transparent; background: transparent; }
