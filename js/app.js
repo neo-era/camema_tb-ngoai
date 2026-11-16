@@ -811,7 +811,7 @@ routes['/map'] = (app) => {
   if (!window.L) { setTimeout(() => curView === '/map' && render(), 300); return; }
   if (S.map) S.map.remove();
   S.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([10.776, 106.69], 13);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(S.map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap', referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(S.map);
   L.control.zoom({ position: 'topright' }).addTo(S.map);
   mapLayer = L.layerGroup().addTo(S.map);
   drawMarkers(true);

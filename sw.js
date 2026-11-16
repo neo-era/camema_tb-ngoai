@@ -1,8 +1,8 @@
 // Service worker: cache "app shell" (cache-first); KHÔNG can thiệp API Apps Script và ô bản đồ OpenStreetMap.
-const SHELL = 'tbngoai-v1.0.5';
+const SHELL = 'tbngoai-v1.0.6';
 const FILES = ['./', 'index.html', 'app.css', 'config.js', 'manifest.webmanifest', 'js/app.js', 'js/core.js', 'js/version.js', 'js/theme.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/exceljs.min.js', 'icons/icon-192.png', 'icons/icon-512.png'];
-self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
+self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== SHELL).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
