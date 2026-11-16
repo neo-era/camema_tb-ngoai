@@ -51,7 +51,7 @@ async function newCtx(opts = {}) {
     const res = env.ctx.doPost({ postData: { contents: body, length: Buffer.byteLength(body) } });
     route.fulfill({ status: 200, contentType: 'application/json', body: res.content });
   });
-  await ctx.route('https://*.tile.openstreetmap.org/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex') }));
+  await ctx.route('https://tile.openstreetmap.org/**', (r) => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex') }));
   return ctx;
 }
 async function login(page, uid) {

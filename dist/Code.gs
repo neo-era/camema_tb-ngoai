@@ -1,6 +1,6 @@
 /* TBNgoài — Backend Apps Script (Web App: Execute as Me, Access: Anyone).
  * File này được sinh bởi tools/build.mjs: lõi nghiệp vụ (src/core.js) nhúng ở dưới. KHÔNG sửa tay phần lõi. */
-var APP_VERSION = '1.0.5';
+var APP_VERSION = '1.0.6';
 
 var COLS = ['id', 'client_id', 'quan', 'phuong', 'tuyen', 'tu', 'so_tru', 'so_tru_den', 'so_tru_qua', 'lat', 'lng', 'gps_acc', 'toa_do_tin_cay',
   'nhom', 'loai', 'don_vi', 'lien_he', 'so_luong', 'mo_ta', 'chieu_cao_m', 'phap_ly', 'loai_vb', 'ben_cap', 'so_vb', 'ngay_vb', 'han_vb',
