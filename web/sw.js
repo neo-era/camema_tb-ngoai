@@ -1,5 +1,5 @@
 // Service worker: cache "app shell" (cache-first), KHÔNG cache API Apps Script; bản đồ nền cache theo lần xem.
-const SHELL = 'tbngoai-v1.0.0';
+const SHELL = 'tbngoai-v1.0.1';
 const TILES = 'tbngoai-tiles';
 const FILES = ['./', 'index.html', 'app.css', 'config.js', 'manifest.webmanifest', 'js/app.js', 'js/core.js', 'js/version.js', 'js/theme.js',
   'vendor/leaflet/leaflet.js', 'vendor/leaflet/leaflet.css', 'vendor/exceljs.min.js', 'icons/icon-192.png', 'icons/icon-512.png'];
@@ -21,7 +21,8 @@ self.addEventListener('fetch', (e) => {
   if (u.origin !== location.origin) return;
   // config.js: mạng trước để nhận URL mới
   if (u.pathname.endsWith('/config.js')) {
-    e.respondWith(fetch(e.request).then((r) => { if (r.ok) { const cp = r.clone(); caches.open(SHELL).then((c) => c.put(e.request, cp)); } return r.ok ? r : caches.match(e.request).then((h) => h || r); }).catch(() => caches.match(e.request)));
+    // no-cache: bỏ qua bộ nhớ đệm HTTP để nhận cấu hình mới ngay
+    e.respondWith(fetch(e.request, { cache: 'no-cache' }).then((r) => { if (r.ok) { const cp = r.clone(); caches.open(SHELL).then((c) => c.put(e.request, cp)); } return r.ok ? r : caches.match(e.request).then((h) => h || r); }).catch(() => caches.match(e.request)));
     return;
   }
   e.respondWith(caches.match(e.request, { ignoreSearch: true }).then((hit) => hit || fetch(e.request).catch(() => (e.request.mode === 'navigate' ? caches.match('index.html') : Response.error()))));
